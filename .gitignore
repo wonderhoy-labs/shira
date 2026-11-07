@@ -1,0 +1,16 @@
+# Android
+build/
+.gradle/
+.kotlin/
+local.properties
+*.jks
+*.keystore
+
+# Web
+node_modules/
+web/dist/
+
+# Editors and systems
+.idea/
+.vscode/
+.DS_Store
