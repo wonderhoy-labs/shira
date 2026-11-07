@@ -1,89 +1,11 @@
 import type { IncomingMessage } from 'node:http';
-import { Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
-import { extensions, logging, packet, server as wisp } from '@mercuryworkshop/wisp-js/server';
+import { extensions, logging, server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { definePasswordAuth, PASSWORD_AUTH_ID } from '../src/wisp/password-auth.ts';
 
+const PASSWORD_AUTH_ID = 0x02;
 const CLOSE_BAD_PASSWORD = 0xc0;
 const CLOSE_NO_CREDENTIALS = 0xc2;
-
-const READ_QUEUE_LIMIT = 64;
-
-/**
- * Takes the place of wisp-js's own TCP socket, which has two problems when the destination is faster than
- * the WebSocket. It keeps reading into memory however much is waiting, and when the destination closes, it
- * throws away whatever hasn't been sent on yet, which cuts downloads short without any error.
- */
-class LosslessTcpSocket {
-  private readonly queue: Buffer[] = [];
-  private readonly socket = new Socket();
-  private waiting: (() => void) | null = null;
-  private ended = false;
-  private connected = false;
-
-  constructor(
-    readonly hostname: string,
-    private readonly port: number,
-  ) {
-    this.socket.setNoDelay(true);
-    this.socket.on('data', (data) => {
-      this.queue.push(data as Buffer);
-      if (this.queue.length >= READ_QUEUE_LIMIT) this.socket.pause();
-      this.wake();
-    });
-    this.socket.on('close', () => {
-      this.ended = true;
-      this.wake();
-    });
-    this.socket.on('error', () => undefined);
-  }
-
-  private wake() {
-    this.waiting?.();
-    this.waiting = null;
-  }
-
-  async connect(address: string) {
-    await new Promise<void>((resolve, reject) => {
-      this.socket.once('connect', () => {
-        this.connected = true;
-        resolve();
-      });
-      this.socket.once('close', () => {
-        if (!this.connected) reject(new Error('connection failed'));
-      });
-      this.socket.connect({ host: address, port: this.port });
-    });
-  }
-
-  /** The next bytes, then undefined once everything's been read. */
-  async recv(): Promise<Buffer | undefined> {
-    while (this.queue.length === 0) {
-      if (this.ended) return undefined;
-      await new Promise<void>((resolve) => {
-        this.waiting = resolve;
-      });
-    }
-    const data = this.queue.shift();
-    if (this.queue.length < READ_QUEUE_LIMIT / 2) this.socket.resume();
-    return data;
-  }
-
-  async send(data: Uint8Array) {
-    await new Promise<void>((resolve) => {
-      this.socket.write(data, () => resolve());
-    });
-  }
-
-  async close() {
-    this.socket.end();
-  }
-
-  // wisp-js calls these around each send. The queue above does the job instead.
-  pause() {}
-  resume() {}
-}
 
 export interface DevWispServer {
   handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): void;
@@ -102,7 +24,6 @@ export function createWispServer(): DevWispServer {
   wisp.options.allow_private_ips = true;
 
   const [username, password] = splitCredentials(process.env.SHIRA_DEV_WISP_AUTH);
-  const PasswordAuth = definePasswordAuth(extensions.PasswordAuthExtension, packet.WispBuffer);
 
   class CheckedConnection extends wisp.ServerConnection {
     override async setup_wisp_v2() {
@@ -126,14 +47,13 @@ export function createWispServer(): DevWispServer {
     const version = request.headers['sec-websocket-protocol'] ? 2 : 1;
     const connection = username
       ? new CheckedConnection(socket, request.url ?? '/', {
-          TCPSocket: LosslessTcpSocket,
           wisp_version: version,
           wisp_extensions: [
             new extensions.UDPExtension({ server_config: {} }),
-            new PasswordAuth({ server_config: { required: 1 } }),
+            new extensions.PasswordAuthExtension({ server_config: { required: 1 } }),
           ],
         })
-      : new wisp.ServerConnection(socket, request.url ?? '/', { TCPSocket: LosslessTcpSocket, wisp_version: version });
+      : new wisp.ServerConnection(socket, request.url ?? '/', { wisp_version: version });
     try {
       await connection.setup();
       await connection.run();

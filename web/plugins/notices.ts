@@ -30,8 +30,11 @@ export function thirdPartyNotices(webDirectory: string): string {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((manifest) => {
       const directory = join(modules, manifest.name);
-      const licenseFile = readdirSync(directory).find((file) => /^(licen[cs]e|copying)/i.test(file));
-      const text = licenseFile ? readFileSync(join(directory, licenseFile), 'utf8').trim() : '(No license file in the package.)';
+      // All of them, because an LGPL package has the GPL alongside it.
+      const licenseFiles = readdirSync(directory).filter((file) => /^(licen[cs]e|copying)/i.test(file));
+      const text =
+        licenseFiles.map((file) => readFileSync(join(directory, file), 'utf8').trim()).join('\n\n') ||
+        '(No license file in the package.)';
       return `${manifest.name} ${manifest.version} (${manifest.license ?? 'unknown'})\n${manifest.homepage ?? ''}\n\n${text}`;
     });
   return `${sections.join(`\n\n${'-'.repeat(72)}\n\n`)}\n`;

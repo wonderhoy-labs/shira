@@ -1,3 +1,4 @@
+import { extensions } from '@mercuryworkshop/wisp-js/client';
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeServerUrl, parseServerInfo } from './connection';
 
@@ -9,6 +10,14 @@ function info(...extensions: [id: number, payload: number[]][]): Uint8Array {
   }
   return new Uint8Array(bytes);
 }
+
+describe('the wisp-js this page is built with', () => {
+  it('writes logins the way the final protocol does', () => {
+    // npm's release writes an early draft's layout, which servers that follow the protocol would misread.
+    const login = new extensions.PasswordAuthExtension({ client_config: { username: 'ab', password: 'xyz' } });
+    expect([...login.serialize().bytes]).toEqual([0x02, 6, 0, 0, 0, 2, 97, 98, 120, 121, 122]);
+  });
+});
 
 describe('parseServerInfo', () => {
   it('finds nothing in a server with no extensions', () => {

@@ -86,11 +86,12 @@ Shira needs these from a server:
 It speaks Wisp version 2, and falls back to version 1 for servers that only have that. It shows a server's welcome message if it
 has one. For logins it does the password extension, which it only ever sends to a server that asked for it. The password stays in
 the tab's memory, so you enter it again after a reload. Key-based logins aren't supported yet, because wisp-js doesn't have them.
+To require a login you need a server that checks it, like epoxy-server, because wisp-js's server doesn't.
 
-> **A problem with wisp-js's server:** when a destination closes a connection, it throws away whatever it hasn't sent on yet, so a
-> fast download can get cut short with no error. It only shows when the destination is faster than your link to the server.
-> The development server here works around it with its own socket class. If you host wisp-js and see truncated downloads, look at
-> `LosslessTcpSocket` in [`dev-wisp.ts`](web/plugins/dev-wisp.ts), or use epoxy-server.
+> **If you host wisp-js:** in the npm release, when a destination closes a connection, the server throws away whatever it hasn't
+> sent on yet, so a fast download can get cut short with no error. It only shows when the destination is faster than your link to
+> the server. The `fixes` branch of [our fork](https://github.com/wonderhoy-labs/wisp-js/tree/fixes) fixes that, and epoxy-server
+> is another way around it.
 
 ## What has been tested
 
@@ -343,8 +344,9 @@ affiliated with Google. Android is a trademark of Google LLC.
 It stands on the work of these projects:
 
 - [wisp-js](https://github.com/MercuryWorkshop/wisp-js) and the [Wisp protocol](https://github.com/MercuryWorkshop/wisp-protocol), by
-  Mercury Workshop. wisp-js is under the GNU LGPL 3.0 or later, and the page and its development server use it unmodified from npm.
-  To use another version, change it in `web/package.json` and rebuild.
+  Mercury Workshop. wisp-js is under the GNU LGPL 3.0 or later. The page and its development server use
+  [our fork](https://github.com/wonderhoy-labs/wisp-js/tree/fixes), which is upstream with two fixes. To use another version, change
+  it in `web/package.json` and rebuild.
 - [Tango](https://github.com/yume-chan/ya-webadb) (MIT), by Simon Chan, for `adb` over WebUSB
 - [mdui](https://github.com/zdhxiong/mdui) (MIT), for the page's Material 3 components
 - [React](https://github.com/facebook/react) (MIT) and [TanStack Virtual](https://github.com/TanStack/virtual) (MIT)

@@ -1,5 +1,4 @@
-import { client, extensions, packet } from '@mercuryworkshop/wisp-js/client';
-import { definePasswordAuth, PASSWORD_AUTH_ID } from './password-auth';
+import { client, extensions } from '@mercuryworkshop/wisp-js/client';
 import { createSocket, type ReadGate } from './socket';
 
 const TYPE_CLOSE = 0x04;
@@ -7,6 +6,7 @@ const TYPE_INFO = 0x05;
 const HEADER_BYTES = 5;
 const VERSION_BYTES = 2;
 const EXTENSION_HEADER_BYTES = 5;
+const PASSWORD_AUTH_ID = 0x02;
 const KEY_AUTH_ID = 0x03;
 const HANDSHAKE_TIMEOUT_MILLIS = 15_000;
 
@@ -47,8 +47,6 @@ interface ConnectionOptions {
 
 const connectionOptions = new WeakMap<object, ConnectionOptions>();
 let nextOptions: ConnectionOptions | null = null;
-
-const PasswordAuth = definePasswordAuth(extensions.PasswordAuthExtension, packet.WispBuffer);
 
 /** What a server said it supports in its INFO packet. */
 export interface ServerInfo {
@@ -155,7 +153,7 @@ export class WispConnection extends client.ClientConnection {
     ];
     // Only to a server that asked for them, so a password can't leak to one that doesn't care.
     if (credentials && info.passwordOffered) {
-      this.wisp_extensions.push(new PasswordAuth({ client_config: credentials }));
+      this.wisp_extensions.push(new extensions.PasswordAuthExtension({ client_config: credentials }));
     }
     return true;
   }

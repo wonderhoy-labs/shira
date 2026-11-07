@@ -84,7 +84,7 @@ declare module '@mercuryworkshop/wisp-js/client' {
 
 declare module '@mercuryworkshop/wisp-js/server' {
   import type { WebSocket } from 'ws';
-  export { extensions, logging, packet, server };
+  export { extensions, logging, server };
 
   namespace extensions {
     class BaseExtension {
@@ -98,13 +98,6 @@ declare module '@mercuryworkshop/wisp-js/server' {
     }
     class UDPExtension extends BaseExtension {}
     class PasswordAuthExtension extends BaseExtension {}
-  }
-
-  namespace packet {
-    class WispBuffer {
-      constructor(source: Uint8Array);
-      bytes: Uint8Array;
-    }
   }
 
   namespace logging {
@@ -122,7 +115,7 @@ declare module '@mercuryworkshop/wisp-js/server' {
       constructor(
         ws: WebSocket,
         path: string,
-        options?: { TCPSocket?: unknown; wisp_version?: number; wisp_extensions?: extensions.BaseExtension[] },
+        options?: { wisp_version?: number; wisp_extensions?: extensions.BaseExtension[] },
       );
       client_exts: Record<number, extensions.BaseExtension | undefined>;
       setup(): Promise<void>;
