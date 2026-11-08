@@ -4,19 +4,19 @@ import com.wonderhoylabs.shira.bridge.Link
 import java.io.ByteArrayOutputStream
 
 /** Where packets for apps go. It's the VPN's device, and tests swap in something else. */
-internal fun interface AppPort {
+fun interface AppPort {
 	fun write(packet: ByteArray, length: Int)
 }
 
-/** The socket to the web page. */
-internal interface PagePort {
+/** The socket to the web page, which speaks [Link][com.wonderhoylabs.shira.bridge.Link] frames. */
+interface PagePort {
 	/** How much is waiting to go, so that a fast sender can hold back. */
 	val queuedBytes: Int
 	fun send(frame: ByteArray)
 }
 
 /** Asks Android which app a connection belongs to. It says -1 if it can't tell. */
-internal fun interface OwnerLookup {
+fun interface OwnerLookup {
 	fun uidOf(protocol: Int, sourceAddress: Int, sourcePort: Int, destinationAddress: Int, destinationPort: Int): Int
 }
 
@@ -37,7 +37,7 @@ class TunnelStats {
  * IPv4 side. Wisp gives no sign that a stream connected, so a connection looks fine to an app the moment
  * it's made, and one to an IPv6 address the server can't reach would fail instead of falling back.
  */
-internal class Tunnel(
+class Tunnel(
 	private val app: AppPort,
 	private val page: PagePort,
 	private val owners: OwnerLookup,
@@ -45,8 +45,20 @@ internal class Tunnel(
 	private val udpAllowed: Boolean,
 	private val stats: TunnelStats,
 	mtu: Int = DEFAULT_MTU,
-) : TcpFlow.Host {
-	override val builder = PacketBuilder(mtu)
+) {
+	private val builder = PacketBuilder(mtu)
+
+	/** What flows call back into. A separate object, so the flows' interface stays out of this class's API. */
+	private val host =
+		object : TcpFlow.Host {
+			override val builder get() = this@Tunnel.builder
+
+			override fun writeToApp(length: Int) = this@Tunnel.writeToApp(length)
+
+			override fun uploadReady(flow: TcpFlow) = this@Tunnel.uploadReady(flow)
+
+			override fun downloadDrained(bytes: Int) = this@Tunnel.downloadDrained(bytes)
+		}
 
 	private val ip = Ipv4Header()
 	private val tcp = TcpHeader()
@@ -196,7 +208,7 @@ internal class Tunnel(
 		val uid = owners.uidOf(PROTOCOL_TCP, ip.source, tcp.sourcePort, ip.destination, tcp.destinationPort)
 		page.send(Link.meta(stream, uid, Link.META_CONNECTION, 0, dns.nameOf(remoteAddress).orEmpty()))
 		val created = TcpFlow(
-			stream, key, ip.source, tcp.sourcePort, ip.destination, tcp.destinationPort, this, tcp,
+			stream, key, ip.source, tcp.sourcePort, ip.destination, tcp.destinationPort, host, tcp,
 			nextSequence, initialCredits, now,
 		)
 		nextSequence += SEQUENCE_STEP
@@ -407,18 +419,18 @@ internal class Tunnel(
 	private fun flowKey(sourcePort: Int, destination: Int, destinationPort: Int): Long =
 		((destination.toLong() and 0xffffffffL) shl 32) or (sourcePort.toLong() shl 16) or destinationPort.toLong()
 
-	override fun writeToApp(length: Int) {
+	private fun writeToApp(length: Int) {
 		app.write(builder.buffer, length)
 	}
 
-	override fun uploadReady(flow: TcpFlow) {
+	private fun uploadReady(flow: TcpFlow) {
 		if (!flow.waitingToUpload) {
 			flow.waitingToUpload = true
 			uploaders.addLast(flow)
 		}
 	}
 
-	override fun downloadDrained(bytes: Int) {
+	private fun downloadDrained(bytes: Int) {
 		downloadBuffered -= bytes
 	}
 

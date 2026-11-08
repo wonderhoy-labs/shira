@@ -1,6 +1,6 @@
 import type { Adb } from "@yume-chan/adb";
 import { PackageManager } from "@yume-chan/android-bin";
-import { ACTIVATE_SCREEN, PACKAGE, SERVICE, SOCKET } from "../shira/constants";
+import { ACTIVATE_SCREEN, PACKAGE, SERVICE, SOCKET } from "./constants";
 
 export type PhoneKind = "usb" | "adb-server";
 

@@ -1,0 +1,47 @@
+{
+	"name": "@wonderhoy-labs/shira",
+	"version": "0.2.0",
+	"description": "A phone's network through a web page, over adb and a Wisp server, with a log of every connection.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/wonderhoy-labs/shira.git",
+		"directory": "packages/shira"
+	},
+	"exports": {
+		".": "./src/index.ts",
+		"./shira.apk": "./shira.apk"
+	},
+	"files": [
+		"dist",
+		"shira.apk",
+		"README.md"
+	],
+	"publishConfig": {
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"./shira.apk": "./shira.apk"
+		}
+	},
+	"scripts": {
+		"build": "vite build && tsc -p tsconfig.build.json && cp src/wisp-js.d.ts dist/ && node -e \"const fs = require('node:fs'); const f = 'dist/index.d.ts'; fs.writeFileSync(f, '/// <reference path=\\\"./wisp-js.d.ts\\\" />\\n' + fs.readFileSync(f, 'utf8'));\"",
+		"prepack": "pnpm run build && cp ../../android/app/build/outputs/apk/release/app-release.apk shira.apk",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@mercuryworkshop/wisp-js": "github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721",
+		"@yume-chan/adb": "2.6.4",
+		"@yume-chan/android-bin": "2.1.0"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.6",
+		"typescript": "7.0.2",
+		"vite": "8.3.6",
+		"vitest": "4.1.12"
+	}
+}

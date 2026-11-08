@@ -17,7 +17,7 @@
 	"scripts": {
 		"lint": "biome ci",
 		"format": "biome check --write",
-		"typecheck": "tsc -p . && pnpm --filter ./web typecheck",
+		"typecheck": "tsc -p . && pnpm --filter ./web --filter ./packages/* typecheck",
 		"theme": "node tools/theme.ts",
 		"unify": "node tools/unify.ts"
 	},

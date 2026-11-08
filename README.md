@@ -67,6 +67,65 @@ for. An app that does its own secure DNS shows up with addresses, because the re
 
 The log only exists in that tab. It's never sent anywhere, and it's gone when you close it. It keeps the latest 20,000 rows.
 
+## Use it in your app
+
+Shira is two libraries, and its own page and app are built on them.
+
+**`@wonderhoy-labs/shira`** gives any web page Shira's whole job: it installs the app it carries, waits for the VPN,
+relays every connection through a Wisp server, keeps going when the server drops, and writes each connection to a log.
+[Asahi](https://github.com/wonderhoy-labs/asahi) uses it. Add a release by its address:
+
+```json
+"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.2.0/wonderhoy-labs-shira-0.2.0.tgz"
+```
+
+Bring an `Adb` from [Tango](https://github.com/yume-chan/ya-webadb), over WebUSB or the `adb` server:
+
+```ts
+import { LogStore, normalizeServerUrl, Phone, ShiraLink } from "@wonderhoy-labs/shira";
+import apkUrl from "@wonderhoy-labs/shira/shira.apk?url";
+
+const phone = new Phone(adb, "My phone", "usb");
+if (!(await phone.appInfo()).installed) {
+	await phone.install(new Uint8Array(await (await fetch(apkUrl)).arrayBuffer()), () => undefined);
+}
+const server = normalizeServerUrl("wss://wisp.example/");
+if ("problem" in server) throw new Error(server.problem);
+const link = new ShiraLink({
+	phone,
+	serverUrl: server.url,
+	credentials: null,
+	log: new LogStore(),
+	events: {
+		onState: (state) => console.log(state),
+		onStopped: (reason) => console.log("stopped", reason),
+	},
+});
+link.start("auto");
+```
+
+| Export | What it does |
+| --- | --- |
+| `ShiraLink` | Waits for the VPN, relays through Wisp, reconnects, and says why it stopped |
+| `Phone` | The app on the phone: its version, installing it, starting the VPN and opening its socket |
+| `LogStore`, `format…`, `describe…` | Every connection, with its app, bytes and how it ended, and words for them |
+| `connectWisp`, `normalizeServerUrl` | Checking a Wisp server, with or without a login |
+
+It needs a bundler that understands `?url`, such as Vite, and a phone that allows USB debugging.
+
+**`shira-tunnel`** is the app's network stack for Android: TCP, UDP and DNS ended in Kotlin from a TUN device's
+packets, and the framing that carries them over a socket, with nothing else from Android. Each release has it as
+`shira-tunnel-<version>.aar`. Add the Wonderhoy Labs repository from
+[the library notes](.claude/skills/wonderhoy-unification/reference/library.md#android-libraries), then:
+
+```kotlin
+implementation("shira:tunnel:0.2.0@aar")
+```
+
+`Tunnel` takes packets from the device with `onAppPacket` and frames from the socket with `onPagePacket`, and
+writes back through the `AppPort` and `PagePort` you give it. `Link` makes and reads the frames. It needs only the
+Kotlin standard library.
+
 ## Wisp servers
 
 A Wisp server turns a WebSocket into TCP and UDP connections. All your phone's traffic goes through it, so use one you run
@@ -265,13 +324,11 @@ pnpm install && pnpm format && pnpm unify
 
 | Where | What's in it |
 | --- | --- |
-| `android/app/src/main/kotlin/com/wonderhoylabs/shira/tunnel/` | The TCP, UDP and DNS side, with nothing Android-specific so that it can be tested on its own |
-| `android/app/src/main/kotlin/com/wonderhoylabs/shira/bridge/` | The messages on the socket |
+| `android/tunnel/` | The `shira-tunnel` library: the TCP, UDP and DNS side, and the messages on the socket, with nothing Android-specific so that it can be tested on its own |
 | `android/app/src/main/kotlin/com/wonderhoylabs/shira/vpn/` | The service, and the thread that moves everything |
 | `android/app/src/main/kotlin/com/wonderhoylabs/shira/ui/` | The app's screen |
-| `web/src/link/` | The messages on the socket, and the relay between it and Wisp |
-| `web/src/wisp/` | The connection to the Wisp server, on top of wisp-js |
-| `web/src/adb/` | Reaching the phone, and what's done on it |
+| `packages/shira/` | The `@wonderhoy-labs/shira` library: the socket's messages, the relay to Wisp, the link, the log, and what's done on the phone |
+| `web/src/adb/` | Reaching the phone over WebUSB or the `adb` server |
 | `web/src/shira/controller.ts` | Everything the page does, step by step |
 | `web/src/ui/` | The page's screens, using [mdui](https://github.com/zdhxiong/mdui) for Material 3 |
 | `web/plugins/` | The Vite plugin: the APK, and the development servers |

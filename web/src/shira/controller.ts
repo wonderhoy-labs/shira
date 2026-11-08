@@ -1,19 +1,22 @@
-import { type AppInfo, InstallError, type Phone } from "../adb/phone";
-import { knownPhone, openUsbPhone, pickPhone } from "../adb/usb";
-import { CLOSE_NETWORK_ERROR, LinkStatus, MetaKind, StreamType } from "../link/frames";
-import { ProtocolMismatchError, Relay, type RelayEvents } from "../link/relay";
-import { LogStore } from "../log/store";
 import {
+	type ActivateMode,
+	type AppInfo,
 	connectWisp,
+	InstallError,
+	LogStore,
 	normalizeServerUrl,
-	type WispConnection,
+	type Phone,
+	ShiraLink,
+	type LinkState as ShiraLinkState,
+	type StopReason,
 	type WispCredentials,
 	WispError,
-} from "../wisp/connection";
+} from "@wonderhoy-labs/shira";
+import { knownPhone, openUsbPhone, pickPhone } from "../adb/usb";
 
+export type { ActivateMode };
 export type Step = "phone" | "app" | "server" | "activate" | "live";
-export type LinkState = "idle" | "waiting-for-app" | "connecting" | "live" | "server-lost" | "phone-lost";
-export type ActivateMode = "auto" | "manual";
+export type LinkState = ShiraLinkState | "phone-lost";
 
 export interface ShiraState {
 	step: Step;
@@ -51,10 +54,6 @@ const STORED_SERVER = "shira.server";
 const STORED_USERNAME = "shira.username";
 const APK_PATH = "shira.apk";
 const POLL_MILLIS = 1_000;
-const MAX_RETRY_MILLIS = 15_000;
-const FIRST_RETRY_MILLIS = 1_000;
-const SLOW_ACTIVATE_MILLIS = 10_000;
-const PACKAGE_REFRESH_MILLIS = 10_000;
 
 function stored(key: string): string {
 	try {
@@ -112,18 +111,12 @@ export class Controller {
 
 	private readonly listeners = new Set<() => void>();
 	private phone: Phone | null = null;
-	private relay: Relay | null = null;
-	private wisp: WispConnection | null = null;
+	private link: ShiraLink | null = null;
 	private serverUrl: string | null = null;
 	private credentials: WispCredentials | null = null;
 	/** Bumped to cancel whatever long-running job is going on. Each one checks it's still current. */
 	private job = 0;
 	private usingUsb = false;
-	private lastPackageRefresh = 0;
-	private statusWaiter: ((up: { ok: true } | { ok: false; message: string }) => void) | null = null;
-	private deactivating = false;
-	/** Why the app said it was closing the socket, as opposed to the socket just going away. */
-	private goodbye: "off" | "replaced" | null = null;
 
 	constructor() {
 		navigator.usb?.addEventListener("connect", () => void this.onUsbPlugged());
@@ -195,7 +188,12 @@ export class Controller {
 			() => this.onPhoneLost(phone),
 		);
 		this.update({ phone: phone.name, busy: null, error: null });
-		void this.refreshPackages(true);
+		void phone.packagesByUid().then(
+			(packages) => {
+				this.log.packages = packages;
+			},
+			(error: unknown) => console.warn("couldn't list the phone's packages", error),
+		);
 		await this.afterPhone();
 	}
 
@@ -203,9 +201,8 @@ export class Controller {
 		if (this.phone !== phone) return;
 		this.phone = null;
 		this.job++;
-		this.statusWaiter?.({ ok: false, message: "The phone was disconnected." });
-		this.statusWaiter = null;
-		this.stopLink();
+		this.link?.stop();
+		this.link = null;
 		this.update({
 			phone: null,
 			installing: false,
@@ -219,7 +216,7 @@ export class Controller {
 	private async afterPhone() {
 		const app = await this.refreshApp();
 		if (this.state.mode && app.installed && this.appIsCurrent(app)) {
-			void this.runLink();
+			this.startLink(this.state.mode);
 			return;
 		}
 		this.update({ step: this.stepAfterPhone(app) });
@@ -361,26 +358,19 @@ export class Controller {
 	// Step 4: going live
 
 	activate(mode: ActivateMode) {
-		this.deactivating = false;
 		this.update({ mode, error: null });
-		void this.runLink();
+		this.startLink(mode);
 	}
 
 	cancelActivate() {
-		this.job++;
-		this.stopLink();
+		this.link?.stop();
 		this.update({ mode: null, link: "idle", busy: null });
 	}
 
 	/** Turns Shira off on the phone, and stays on this page ready to turn it back on. */
 	deactivate() {
-		this.job++;
-		this.deactivating = true;
-		this.update({ mode: null });
-		const relay = this.relay;
-		if (relay) relay.deactivate();
-		this.closeWisp();
-		this.update({ link: "idle", step: "activate", busy: null });
+		this.link?.deactivate();
+		this.update({ mode: null, link: "idle", step: "activate", busy: null });
 	}
 
 	/** For a phone that went away while using the adb server, which can't announce its return. */
@@ -388,231 +378,67 @@ export class Controller {
 		this.update({ step: "phone", error: null });
 	}
 
-	/**
-	 * Gets from here to connected. [startApp] is false when going back to an app that's already running,
-	 * because anything else would turn Shira back on after someone turned it off.
-	 */
-	private async runLink(startApp = true) {
-		const job = ++this.job;
-		const isCurrent = () => this.job === job;
-		const mode = this.state.mode;
-		let phone: Phone;
-		try {
-			phone = this.requirePhone();
-			this.update({ link: "waiting-for-app", busy: null });
-			this.goodbye = null;
-			if (mode === "auto" && startApp) await phone.activate();
-			const relay = await this.waitForApp(phone, mode, isCurrent);
-			if (!relay || !isCurrent()) return;
-			await this.keepConnected(relay, isCurrent);
-		} catch (error) {
-			if (!isCurrent()) return;
-			this.stopLink();
-			if (error instanceof ProtocolMismatchError) {
+	private startLink(mode: ActivateMode) {
+		this.link?.stop();
+		const phone = this.phone;
+		if (!phone || !this.serverUrl) {
+			this.update({
+				mode: null,
+				link: "idle",
+				error: phone ? "Choose a Wisp server first." : "The phone was disconnected.",
+			});
+			return;
+		}
+		const link = new ShiraLink({
+			phone,
+			serverUrl: this.serverUrl,
+			credentials: this.credentials,
+			log: this.log,
+			events: {
+				onState: (state) => {
+					if (this.link === link)
+						this.update(state === "live" ? { link: state, step: "live" } : { link: state });
+				},
+				onBusy: (busy) => {
+					if (this.link === link) this.update({ busy });
+				},
+				onHello: (appVersion) => this.update({ appVersion }),
+				onServer: ({ udp, wispVersion, message: serverMessage }) =>
+					this.update({ udp, wispVersion, serverMessage }),
+				onStopped: (reason) => {
+					if (this.link === link) this.onLinkStopped(reason);
+				},
+			},
+		});
+		this.link = link;
+		link.start(mode);
+	}
+
+	private onLinkStopped(reason: StopReason) {
+		this.link = null;
+		const idle = { mode: null, link: "idle", busy: null } as const;
+		switch (reason.kind) {
+			case "app-mismatch":
 				this.update({
-					mode: null,
-					link: "idle",
+					...idle,
 					step: "app",
 					appCurrent: false,
-					error: `${error.message} Install the version from this site.`,
+					error: `${reason.message} Install the version from this site.`,
 				});
-				return;
-			}
-			this.update({ mode: null, link: "idle", step: "activate", busy: null, error: message(error) });
-		}
-	}
-
-	/**
-	 * Waits for the app's service, and connects to its socket.
-	 *
-	 * Any app on the phone could listen on the socket's name, so this waits until Shira's own service is
-	 * running first. The service stops if it can't get the name, so once it's running the name is its own.
-	 */
-	private async waitForApp(phone: Phone, mode: ActivateMode | null, isCurrent: () => boolean): Promise<Relay | null> {
-		const started = Date.now();
-		while (isCurrent()) {
-			if (mode === "auto" && Date.now() - started > SLOW_ACTIVATE_MILLIS) {
-				this.update({ busy: "Unlock your phone. If it's asking about a VPN connection, tap OK." });
-			}
-			if (await phone.isServiceRunning()) {
-				try {
-					const socket = await phone.openSocket();
-					const relay = new Relay(socket, this.relayEvents());
-					this.relay = relay;
-					const hello = await relay.greet();
-					this.update({ appVersion: hello.appVersion, busy: null });
-					return relay;
-				} catch (error) {
-					this.stopLink();
-					if (error instanceof ProtocolMismatchError) throw error;
-					// The service is still setting up its socket.
-				}
-			}
-			await sleep(POLL_MILLIS);
-		}
-		return null;
-	}
-
-	/** Stays connected to the Wisp server until the phone goes or the page says stop. */
-	private async keepConnected(relay: Relay, isCurrent: () => boolean) {
-		const url = this.serverUrl;
-		if (!url) throw new Error("Choose a Wisp server first.");
-		let delay = FIRST_RETRY_MILLIS;
-		let everUp = false;
-
-		while (isCurrent() && this.relay === relay) {
-			this.update({ link: everUp ? "server-lost" : "connecting" });
-			let wisp: WispConnection;
-			try {
-				wisp = await connectWisp(url, this.credentials, relay.downloadGate);
-			} catch (error) {
-				const refused = error instanceof WispError && error.failure !== "unreachable";
-				// A login problem won't fix itself, and a server that never worked probably has the wrong address.
-				if (refused || !everUp) throw error;
-				await sleep(delay);
-				delay = Math.min(delay * 2, MAX_RETRY_MILLIS);
-				continue;
-			}
-			if (!isCurrent() || this.relay !== relay) {
-				wisp.close();
-				return;
-			}
-			this.wisp = wisp;
-			const lost = new Promise<void>((resolve) => {
-				wisp.onclose = () => resolve();
-				wisp.onerror = () => resolve();
-			});
-			this.update({
-				udp: wisp.udp_enabled,
-				wispVersion: wisp.wisp_version,
-				serverMessage: wisp.server_motd ?? null,
-			});
-
-			const status = new Promise<{ ok: true } | { ok: false; message: string }>((resolve) => {
-				this.statusWaiter = resolve;
-			});
-			relay.attach(wisp, new URL(url).host);
-			const up = await status;
-			if (!up.ok) {
-				wisp.onclose = () => undefined;
-				wisp.close();
-				throw new Error(up.message);
-			}
-			everUp = true;
-			delay = FIRST_RETRY_MILLIS;
-			this.update({ link: "live", step: "live", busy: null });
-
-			await lost;
-			if (!isCurrent() || this.relay !== relay) return;
-			this.wisp = null;
-			this.log.closeAll(CLOSE_NETWORK_ERROR, Date.now());
-			relay.detach();
-			this.update({ link: "server-lost" });
-			await sleep(delay);
-		}
-	}
-
-	private relayEvents(): RelayEvents {
-		return {
-			onStreamOpen: (stream, request) => {
-				const kind = request.streamType === StreamType.UDP ? "udp" : "tcp";
-				this.log.open(stream, kind, request.host, request.port, Date.now());
-			},
-			onStreamMeta: (stream, meta) => {
-				this.log.describe(
-					stream,
-					meta.kind === MetaKind.DNS ? "dns" : null,
-					meta.uid,
-					meta.name,
-					meta.queryType,
-				);
-				if (meta.uid >= 0 && !this.log.packages.has(meta.uid)) void this.refreshPackages(false);
-			},
-			onStreamData: (stream, up, down) => this.log.addBytes(stream, up, down),
-			onStreamClose: (stream, reason) => this.log.close(stream, reason, Date.now()),
-			onStatus: (code, statusMessage) => {
-				if (code === LinkStatus.UP) {
-					this.statusWaiter?.({ ok: true });
-					this.statusWaiter = null;
-				} else if (code === LinkStatus.FAILED) {
-					this.statusWaiter?.({
-						ok: false,
-						message: `Android wouldn't start the VPN. ${statusMessage}`.trim(),
-					});
-					this.statusWaiter = null;
-				} else if (code === LinkStatus.OFF) {
-					this.goodbye = "off";
-				} else if (code === LinkStatus.REPLACED) {
-					this.goodbye = "replaced";
-				}
-			},
-			onEnded: () => this.onRelayEnded(),
-		};
-	}
-
-	private onRelayEnded() {
-		const wasDeactivating = this.deactivating;
-		this.deactivating = false;
-		this.relay = null;
-		this.closeWisp();
-		this.log.closeAll(CLOSE_NETWORK_ERROR, Date.now());
-		// Unplugging ends this too, and that's handled when adb notices, a moment later.
-		if (!this.phone || wasDeactivating || !this.state.mode) return;
-		if (this.state.link === "waiting-for-app") return;
-		const standDown = (reason: string) => {
-			this.job++;
-			this.statusWaiter?.({ ok: false, message: reason });
-			this.statusWaiter = null;
-			this.update({ mode: null, link: "idle", step: "activate", error: reason });
-		};
-		const offMessage = "Shira was turned off on the phone.";
-		if (this.goodbye === "off") {
-			standDown(offMessage);
-			return;
-		}
-		if (this.goodbye === "replaced") {
-			standDown("Another page took over this phone. Activate here to take it back.");
-			return;
-		}
-		void this.phone.isServiceRunning().then(
-			(running) => {
-				if (!this.phone || !this.state.mode) return;
-				// It dropped this connection for being silent, say, so connect again.
-				if (running) void this.runLink(false);
-				else standDown(offMessage);
-			},
-			() => undefined,
-		);
-	}
-
-	private stopLink() {
-		const relay = this.relay;
-		this.relay = null;
-		this.deactivating = true;
-		relay?.close();
-		this.deactivating = false;
-		this.closeWisp();
-		this.log.closeAll(CLOSE_NETWORK_ERROR, Date.now());
-	}
-
-	private closeWisp() {
-		const wisp = this.wisp;
-		this.wisp = null;
-		if (!wisp) return;
-		wisp.onclose = () => undefined;
-		wisp.onerror = () => undefined;
-		wisp.close();
-	}
-
-	private async refreshPackages(force: boolean) {
-		const now = Date.now();
-		if (!force && now - this.lastPackageRefresh < PACKAGE_REFRESH_MILLIS) return;
-		this.lastPackageRefresh = now;
-		try {
-			const packages = await this.phone?.packagesByUid();
-			if (packages) this.log.packages = packages;
-		} catch (error) {
-			console.warn("couldn't list the phone's packages", error);
+				break;
+			case "off":
+				this.update({ ...idle, step: "activate", error: "Shira was turned off on the phone." });
+				break;
+			case "replaced":
+				this.update({
+					...idle,
+					step: "activate",
+					error: "Another page took over this phone. Activate here to take it back.",
+				});
+				break;
+			case "error":
+				this.update({ ...idle, step: "activate", error: reason.message });
+				break;
 		}
 	}
 }

@@ -15,10 +15,10 @@ is at <https://wonderhoy-labs.github.io/shira/>.
 
 | Path | What |
 | --- | --- |
-| `android/app/src/main/kotlin/com/wonderhoylabs/shira/tunnel/` | TCP, UDP and DNS, with nothing Android-specific |
+| `android/tunnel/` | The `shira-tunnel` library: TCP, UDP and DNS, and the socket's frames, with nothing Android-specific |
 | `android/app/src/main/kotlin/com/wonderhoylabs/shira/vpn/` | The service and the thread that moves everything |
-| `web/src/link/`, `web/src/wisp/` | The socket's messages, and the relay to the Wisp server |
-| `web/src/adb/` | Reaching the phone |
+| `packages/shira/` | The `@wonderhoy-labs/shira` library: messages, Wisp relay, `ShiraLink`, the log, the phone |
+| `web/src/adb/` | Reaching the phone over WebUSB or the adb server |
 | `web/src/shira/controller.ts` | Everything the page does, step by step |
 | `web/plugins/` | The Vite plugin: the APK, the notices, and the development Wisp and adb servers |
 
@@ -26,8 +26,9 @@ is at <https://wonderhoy-labs.github.io/shira/>.
 
 ```bash
 pnpm install && pnpm unify
-cd android && ./gradlew spotlessApply :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
-cd web && pnpm test && pnpm build
+cd android && ./gradlew spotlessApply :tunnel:testDebugUnitTest :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+cd packages/shira && pnpm test
+cd web && pnpm build
 ```
 
 The site's build carries the release APK, so build the app first. `pnpm dev` in `web/` serves the debug APK, a Wisp
@@ -37,7 +38,10 @@ server and a bridge to `adb`, so the real page runs against an emulator.
 
 - **DNS goes through a resolver on the phone** that proxies to 1.1.1.1 over Wisp, not fake IPs. The page has to
   support Wisp v2 and the password extension. Both were the maintainer's choices.
-- **wisp-js comes from the fork** `wonderhoy-labs/wisp-js`, pinned by commit in `web/package.json`. Fix its bugs
+- **Both libraries are public.** Asahi uses `@wonderhoy-labs/shira` from releases, and other apps may use
+  `shira-tunnel`. What `packages/shira/src/index.ts` exports, and the tunnel's public classes, are the API: keep them
+  documented, and bump the minor version for a breaking change.
+- **wisp-js comes from the fork** `wonderhoy-labs/wisp-js`, pinned by commit in `packages/shira/package.json` and `web/package.json`. Fix its bugs
   there, on the `fixes` branch, and move the pin. Never open issues or pull requests on `MercuryWorkshop/wisp-js`.
   wisp-js still writes an old draft of the password message, and Shira overrides it with the final layout.
 - **WebUSB and adb can't share a phone**, and Android Studio restarts adb. WebUSB can't be automated, because
