@@ -22,3 +22,6 @@ captures/
 .vscode/
 *.iml
 .DS_Store
+
+# Library packages carry the release APK when packed
+packages/*/*.apk

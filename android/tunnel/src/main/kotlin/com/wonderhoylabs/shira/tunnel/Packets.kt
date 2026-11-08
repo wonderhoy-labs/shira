@@ -44,10 +44,12 @@ internal fun putI32(bytes: ByteArray, at: Int, value: Int) {
 	bytes[at + 3] = value.toByte()
 }
 
-internal fun ipv4ToString(address: Int): String =
+/** An IPv4 address held in an Int, written as `a.b.c.d`. */
+fun ipv4ToString(address: Int): String =
 	"${address ushr 24}.${(address ushr 16) and 0xff}.${(address ushr 8) and 0xff}.${address and 0xff}"
 
-internal fun ipv4(a: Int, b: Int, c: Int, d: Int): Int = (a shl 24) or (b shl 16) or (c shl 8) or d
+/** The IPv4 address `a.b.c.d`, held in an Int the way the tunnel keeps addresses. */
+fun ipv4(a: Int, b: Int, c: Int, d: Int): Int = (a shl 24) or (b shl 16) or (c shl 8) or d
 
 /** Adds [length] bytes to a running Internet checksum, as 16-bit big-endian words. */
 private fun sum(start: Long, bytes: ByteArray, offset: Int, length: Int): Long {

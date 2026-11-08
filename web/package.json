@@ -8,7 +8,7 @@
 		"build": "tsc --noEmit && vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run --passWithNoTests"
 	},
 	"devDependencies": {
 		"@types/node": "26.6.6",
@@ -23,6 +23,7 @@
 		"ws": "8.22.1"
 	},
 	"dependencies": {
+		"@wonderhoy-labs/shira": "workspace:*",
 		"@fontsource-variable/roboto-flex": "5.3.0",
 		"@mdui/icons": "1.0.4",
 		"@mercuryworkshop/wisp-js": "github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721",

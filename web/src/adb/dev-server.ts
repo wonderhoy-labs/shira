@@ -1,6 +1,6 @@
+import { Phone } from "@wonderhoy-labs/shira";
 import { AdbServerClient } from "@yume-chan/adb";
 import { MaybeConsumable, ReadableStream } from "@yume-chan/stream-extra";
-import { Phone } from "./phone";
 
 /**
  * Reaches the adb server on this computer through the development server. Emulators don't appear over

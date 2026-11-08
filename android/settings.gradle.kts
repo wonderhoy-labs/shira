@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "shira"
-include(":app")
+include(":app", ":tunnel")

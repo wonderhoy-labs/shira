@@ -1,7 +1,7 @@
+import { Phone } from "@wonderhoy-labs/shira";
 import { Adb, AdbDaemonTransport } from "@yume-chan/adb";
 import AdbWebCredentialStore from "@yume-chan/adb-credential-web";
 import { AdbDaemonWebUsbDevice, AdbDaemonWebUsbDeviceManager } from "@yume-chan/adb-daemon-webusb";
-import { Phone } from "./phone";
 
 /** How much can be on its way before adb waits for the other side. Bigger is faster, and adds some delay. */
 const DELAYED_ACK_BYTES = 1024 * 1024;
