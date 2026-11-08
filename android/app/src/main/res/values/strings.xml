@@ -1,34 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Shira</string>
-    <string name="tagline">Networking through your browser</string>
-    <string name="site_address" translatable="false">wonderhoy-labs.github.io/shira</string>
+	<string name="app_name">Shira</string>
+	<string name="tagline">Networking through your browser</string>
+	<string name="site_address" translatable="false">wonderhoy-labs.github.io/shira</string>
 
-    <string name="activate">Activate</string>
-    <string name="deactivate">Deactivate</string>
-    <string name="dismiss">Dismiss</string>
+	<string name="activate">Activate</string>
+	<string name="deactivate">Deactivate</string>
+	<string name="dismiss">Dismiss</string>
 
-    <string name="status_off">Off</string>
-    <string name="status_off_body">Activate Shira here, or let the web page do it for you.</string>
-    <string name="status_waiting">Waiting for your computer</string>
-    <string name="status_waiting_body">Your network keeps working as normal until the web page connects.</string>
-    <string name="status_connected">Connected</string>
-    <string name="status_connected_body">Through %1$s</string>
-    <string name="stat_down">Downloaded</string>
-    <string name="stat_up">Uploaded</string>
-    <string name="stat_connections">Connections</string>
+	<string name="status_off">Off</string>
+	<string name="status_off_body">Activate Shira here, or let the web page do it for you.</string>
+	<string name="status_waiting">Waiting for your computer</string>
+	<string name="status_waiting_body">Your network keeps working as normal until the web page connects.</string>
+	<string name="status_connected">Connected</string>
+	<string name="status_connected_body">Through %1$s</string>
+	<string name="stat_down">Downloaded</string>
+	<string name="stat_up">Uploaded</string>
+	<string name="stat_connections">Connections</string>
 
-    <string name="steps_title">How to connect</string>
-    <string name="step_cable">Turn on USB debugging in Developer options, and plug this phone into a computer.</string>
-    <string name="step_site">On the computer, open %1$s in Chrome or Edge.</string>
-    <string name="step_server">Connect your phone and enter a Wisp server. The web page shows every connection from then on.</string>
+	<string name="steps_title">How to connect</string>
+	<string name="step_cable">Turn on USB debugging in Developer options, and plug this phone into a computer.</string>
+	<string name="step_site">On the computer, open %1$s in Chrome or Edge.</string>
+	<string name="step_server">Connect your phone and enter a Wisp server. The web page shows every connection from then on.</string>
 
-    <string name="notification_channel">Status</string>
-    <string name="notification_waiting">Waiting for your computer</string>
-    <string name="notification_connected">Connected through %1$s</string>
+	<string name="notification_channel">Status</string>
+	<string name="notification_waiting">Waiting for your computer</string>
+	<string name="notification_connected">Connected through %1$s</string>
 
-    <string name="error_refused">Android needs your OK before Shira can act as a VPN.</string>
-    <string name="error_revoked">Shira was turned off because another VPN took over, or it was turned off in Settings.</string>
-    <string name="error_not_prepared">Another VPN has taken over. Open Shira on the phone and activate it again.</string>
-    <string name="error_socket_taken">Another app is using Shira\'s connection name. Restart the phone and try again.</string>
+	<string name="error_refused">Android needs your OK before Shira can act as a VPN.</string>
+	<string name="error_revoked">Shira was turned off because another VPN took over, or it was turned off in Settings.</string>
+	<string name="error_not_prepared">Another VPN has taken over. Open Shira on the phone and activate it again.</string>
+	<string name="error_socket_taken">Another app is using Shira\'s connection name. Restart the phone and try again.</string>
 </resources>

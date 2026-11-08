@@ -1,0 +1,6 @@
+packages:
+  - web
+
+# Install scripts are off unless a package is allowed here. bufferutil only speeds up ws, which works without it.
+allowBuilds:
+  bufferutil: false

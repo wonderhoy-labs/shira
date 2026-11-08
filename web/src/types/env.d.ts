@@ -1,14 +1,13 @@
 /// <reference types="mdui/jsx.en.d.ts" />
-import type React from 'react';
+import type { DetailedHTMLProps, HTMLAttributes } from "react";
 
-type IconProps = React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & { slot?: string };
+type IconProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & { slot?: string };
 
-declare global {
-  namespace React {
-    namespace JSX {
-      interface IntrinsicElements {
-        [icon: `mdui-icon-${string}`]: IconProps;
-      }
-    }
-  }
+// mdui types its components for JSX, but not the icons from @mdui/icons.
+declare module "react" {
+	namespace JSX {
+		interface IntrinsicElements {
+			[icon: `mdui-icon-${string}`]: IconProps;
+		}
+	}
 }

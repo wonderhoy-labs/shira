@@ -1,0 +1,97 @@
+/* Shared by every Wonderhoy Labs web app. Change it in wonderhoy-labs/template first. */
+
+:root {
+	--page-gutter: 24px;
+	font-family: "Roboto Flex Variable", system-ui, sans-serif;
+}
+
+@media (min-width: 840px) {
+	:root {
+		--page-gutter: 32px;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: rgb(var(--mdui-color-background));
+	color: rgb(var(--mdui-color-on-background));
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2 {
+	font-weight: 400;
+}
+
+/* The page: a faint wash of the character's colours behind everything. */
+.app {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+	background:
+		radial-gradient(1200px 600px at 0% -10%, rgba(var(--mdui-color-primary-container), 0.7), transparent 70%),
+		radial-gradient(900px 500px at 100% 0%, rgba(var(--mdui-color-tertiary-container), 0.4), transparent 70%),
+		rgb(var(--mdui-color-background));
+}
+
+.app-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 14px var(--page-gutter);
+	flex: none;
+}
+
+.app-bar-logo {
+	width: 40px;
+	height: 40px;
+	border-radius: 12px;
+	object-fit: cover;
+}
+
+.app-bar-title {
+	font-size: 22px;
+	font-weight: 500;
+	letter-spacing: 0.2px;
+}
+
+.app-bar-space {
+	flex: 1;
+}
+
+.app-footer {
+	padding: 16px var(--page-gutter) 24px;
+	text-align: center;
+	color: rgb(var(--mdui-color-on-surface-variant));
+	font-size: 12px;
+	flex: none;
+}
+
+.app-footer a {
+	color: inherit;
+}
+
+/* Inline, so it stays beside the words however they wrap. */
+.app-footer-mark {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	margin-inline-end: 8px;
+	vertical-align: -1px;
+	border-radius: 50%;
+	background: rgb(var(--wonderhoy-brand));
+	box-shadow: 0 0 0 2px rgba(var(--wonderhoy-brand), 0.3);
+	flex: none;
+}
