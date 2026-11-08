@@ -32,7 +32,9 @@ export function Footer() {
 				<a href="https://github.com/wonderhoy-labs" target="_blank" rel="noreferrer">
 					Wonderhoy Labs
 				</a>{" "}
-				project, named for {brand.character} of {brand.unit}.
+				project, named for {brand.character} of {brand.unit}
+				{/* 25-ji, Nightcord de. already ends in one. */}
+				{brand.unit.endsWith(".") ? "" : "."}
 			</span>
 		</footer>
 	);
