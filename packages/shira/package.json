@@ -34,11 +34,14 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@mercuryworkshop/wisp-js": "github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721",
 		"@yume-chan/adb": "2.6.4",
 		"@yume-chan/android-bin": "2.1.0"
 	},
+	"peerDependencies": {
+		"@mercuryworkshop/wisp-js": "*"
+	},
 	"devDependencies": {
+		"@mercuryworkshop/wisp-js": "github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721",
 		"@types/node": "26.6.6",
 		"typescript": "7.0.2",
 		"vite": "8.3.6",

@@ -111,7 +111,13 @@ link.start("auto");
 | `LogStore`, `format…`, `describe…` | Every connection, with its app, bytes and how it ended, and words for them |
 | `connectWisp`, `normalizeServerUrl` | Checking a Wisp server, with or without a login |
 
-It needs a bundler that understands `?url`, such as Vite, and a phone that allows USB debugging.
+It needs a bundler that understands `?url`, such as Vite, and a phone that allows USB debugging. It runs on wisp-js
+from Wonderhoy Labs' fork, which pnpm won't fetch from git for a dependency's dependency, so add it next to the library,
+pinned as in [`packages/shira/package.json`](packages/shira/package.json):
+
+```json
+"@mercuryworkshop/wisp-js": "github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721"
+```
 
 **`shira-tunnel`** is the app's network stack for Android: TCP, UDP and DNS ended in Kotlin from a TUN device's
 packets, and the framing that carries them over a socket, with nothing else from Android. Each release has it as

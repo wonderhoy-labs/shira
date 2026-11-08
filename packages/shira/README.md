@@ -21,5 +21,7 @@ if ("url" in server) {
 }
 ```
 
-`adb` is a connected `Adb` from [Tango](https://github.com/yume-chan/ya-webadb). The rest is in
+`adb` is a connected `Adb` from [Tango](https://github.com/yume-chan/ya-webadb). The library runs on wisp-js from
+Wonderhoy Labs' fork, which pnpm won't fetch from git for a dependency's dependency, so add it yourself, pinned as in
+[Shira's own package](https://github.com/wonderhoy-labs/shira/blob/main/packages/shira/package.json). The rest is in
 [Shira's README](https://github.com/wonderhoy-labs/shira#use-it-in-your-app). Apache License 2.0.
