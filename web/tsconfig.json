@@ -1,20 +1,20 @@
 {
-  "compilerOptions": {
-    "target": "ES2023",
-    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "types": ["vite/client", "w3c-web-usb", "node"]
-  },
-  "include": ["src", "plugins", "vite.config.ts"]
+	"compilerOptions": {
+		"target": "ESNext",
+		"lib": ["ESNext", "DOM", "DOM.Iterable", "WebWorker"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"jsx": "react-jsx",
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"types": ["vite/client", "w3c-web-usb", "node"]
+	},
+	"include": ["src", "plugins", "vite.config.ts"]
 }
