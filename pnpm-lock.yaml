@@ -206,9 +206,6 @@ importers:
 
   packages/shira:
     dependencies:
-      '@mercuryworkshop/wisp-js':
-        specifier: github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721
-        version: https://codeload.github.com/wonderhoy-labs/wisp-js/tar.gz/960fa6b995d3b210d77fd81e99435aa7cf555721
       '@yume-chan/adb':
         specifier: 2.6.4
         version: 2.6.4
@@ -216,6 +213,9 @@ importers:
         specifier: 2.1.0
         version: 2.1.0
     devDependencies:
+      '@mercuryworkshop/wisp-js':
+        specifier: github:wonderhoy-labs/wisp-js#960fa6b995d3b210d77fd81e99435aa7cf555721
+        version: https://codeload.github.com/wonderhoy-labs/wisp-js/tar.gz/960fa6b995d3b210d77fd81e99435aa7cf555721
       '@types/node':
         specifier: 26.6.6
         version: 26.6.6
