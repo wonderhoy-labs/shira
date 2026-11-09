@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.2.1"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/wonderhoy-labs/shira"
+publish = false
+rust-version = "1.91"
+
+[workspace.dependencies]
+libc = "0.2"
+
+# Shared by every Wonderhoy Labs repository. Every crate opts in with `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true
