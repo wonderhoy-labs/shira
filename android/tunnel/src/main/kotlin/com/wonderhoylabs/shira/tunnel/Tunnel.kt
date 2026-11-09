@@ -30,12 +30,32 @@ class TunnelStats {
 }
 
 /**
+ * Hands out Wisp stream IDs. Tunnels that share one page share one of these, so that their streams never clash.
+ *
+ * IDs start at 1 and wrap around before they would turn negative. Only the tunnels' thread uses it.
+ */
+class StreamIds {
+	private var next = 1
+
+	/** The next ID. */
+	fun take(): Int {
+		val stream = next
+		next = if (stream == Int.MAX_VALUE) 1 else stream + 1
+		return stream
+	}
+}
+
+/**
  * Turns the packets apps send into Wisp streams, and Wisp streams back into packets.
  *
  * Everything happens on one thread. [BridgeLoop][com.wonderhoylabs.shira.vpn.BridgeLoop] feeds this from
  * the device and the socket, and calls [afterBatch] when it runs out of things to read. There's only an
  * IPv4 side. Wisp gives no sign that a stream connected, so a connection looks fine to an app the moment
  * it's made, and one to an IPv6 address the server can't reach would fail instead of falling back.
+ *
+ * More than one tunnel can share a page, each with its own device, like the phone's VPN and Android's Linux VM.
+ * They take their stream IDs from the same [streams], and [owns] says which one a packet from the page is for.
+ * Their [stats] can be shared too.
  */
 class Tunnel(
 	private val app: AppPort,
@@ -45,6 +65,7 @@ class Tunnel(
 	private val udpAllowed: Boolean,
 	private val stats: TunnelStats,
 	mtu: Int = DEFAULT_MTU,
+	private val streams: StreamIds = StreamIds(),
 ) {
 	private val builder = PacketBuilder(mtu)
 
@@ -72,9 +93,9 @@ class Tunnel(
 	private val uploaders = ArrayDeque<TcpFlow>()
 	private val uploadBuffer = ByteArray(Link.FRAME_OVERHEAD + UPLOAD_CHUNK_BYTES)
 
-	private var nextStream = 1
 	private var nextSequence = 0x5a17_0000
 	private var lastSweep = 0L
+	private var counted = 0
 
 	/** Bytes held for apps that haven't read them yet. The loop stops reading the socket when it's high. */
 	var downloadBuffered = 0L
@@ -152,6 +173,31 @@ class Tunnel(
 			.maxByOrNull { it.downloadBytes } ?: return
 		stalled.abort()
 		remove(stalled)
+	}
+
+	/** Whether [stream] is one of this tunnel's, so that a packet from the page about it belongs here. */
+	fun owns(stream: Int): Boolean =
+		tcpByStream.containsKey(stream) || udpByStream.containsKey(stream) || dnsByStream.containsKey(stream)
+
+	/**
+	 * Ends everything, for when the device has gone but the page hasn't: each open stream gets a CLOSE, and the
+	 * tunnel forgets it. Nothing more is sent to the device. Call it once, and drop the tunnel afterwards.
+	 */
+	fun close() {
+		for (flow in tcpFlows.values) {
+			if (flow.streamOpen) page.send(Link.close(flow.streamId, Link.CLOSE_VOLUNTARY))
+		}
+		for (stream in udpByStream.keys) page.send(Link.close(stream, Link.CLOSE_VOLUNTARY))
+		for (stream in dnsByStream.keys) page.send(Link.close(stream, Link.CLOSE_VOLUNTARY))
+		tcpFlows.clear()
+		tcpByStream.clear()
+		udpFlows.clear()
+		udpByStream.clear()
+		dnsByStream.clear()
+		touched.clear()
+		uploaders.clear()
+		downloadBuffered = 0
+		updateConnections()
 	}
 
 	/** Called when the socket can take more, to move data that's been waiting. Flows take turns. */
@@ -406,15 +452,14 @@ class Tunnel(
 		}
 	}
 
+	/** Adds this tunnel's change, so that tunnels sharing [stats] count together. */
 	private fun updateConnections() {
-		stats.connections = tcpFlows.size + udpFlows.size
+		val count = tcpFlows.size + udpFlows.size
+		stats.connections += count - counted
+		counted = count
 	}
 
-	private fun takeStream(): Int {
-		val stream = nextStream
-		nextStream = if (stream == Int.MAX_VALUE) 1 else stream + 1
-		return stream
-	}
+	private fun takeStream(): Int = streams.take()
 
 	private fun flowKey(sourcePort: Int, destination: Int, destinationPort: Int): Long =
 		((destination.toLong() and 0xffffffffL) shl 32) or (sourcePort.toLong() shl 16) or destinationPort.toLong()

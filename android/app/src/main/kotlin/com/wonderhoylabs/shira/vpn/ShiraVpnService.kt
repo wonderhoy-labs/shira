@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -15,14 +16,19 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ServiceCompat
+import com.wonderhoylabs.shira.BuildConfig
 import com.wonderhoylabs.shira.R
+import com.wonderhoylabs.shira.bridge.VmLink
 import com.wonderhoylabs.shira.tunnel.Tunnel
 import com.wonderhoylabs.shira.tunnel.TunnelStats
 import com.wonderhoylabs.shira.tunnel.ipv4ToString
 import com.wonderhoylabs.shira.ui.MainActivity
 import java.io.IOException
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.net.SocketException
 import kotlin.concurrent.thread
 
 /** Waits for the web page over adb, and runs a VPN that sends the phone's traffic to it. */
@@ -36,6 +42,11 @@ internal class ShiraVpnService :
 	override var lastRefusal = ""
 		private set
 
+	override var vmFinder = VmNetworkFinder(::findVmNetwork)
+		private set
+
+	override val vmOwner by lazy(::terminalUid)
+
 	override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 		if (intent?.action == ACTION_STOP) {
 			loop?.stop() ?: stopSelf()
@@ -46,6 +57,9 @@ internal class ShiraVpnService :
 		if (worker != null) return Service.START_NOT_STICKY
 
 		ShiraState.setError(null)
+		devVmListen(intent)?.let { address ->
+			vmFinder = VmNetworkFinder { VmNetwork(address, 0, checkPeers = false) }
+		}
 		val created = BridgeLoop(this)
 		loop = created
 		worker = thread(name = "shira-bridge", isDaemon = true) { runLoop(created) }
@@ -87,6 +101,9 @@ internal class ShiraVpnService :
 				.addAddress(ipv4ToString(Tunnel.TUN_ADDRESS), HOST_PREFIX)
 				.addRoute(DEFAULT_ROUTE, 0)
 				.addDnsServer(ipv4ToString(Tunnel.DNS_ADDRESS))
+				// Shira itself only listens for the Linux VM, on the VM's network. Inside its own VPN, Android would
+				// drop what the VM sends it, and send the answers into the VPN.
+				.addDisallowedApplication(packageName)
 				.setBlocking(false)
 				.setMetered(false)
 				.setConfigureIntent(openAppIntent())
@@ -95,6 +112,9 @@ internal class ShiraVpnService :
 			lastRefusal = error.message.orEmpty()
 			return null
 		} catch (error: SecurityException) {
+			lastRefusal = error.message.orEmpty()
+			return null
+		} catch (error: PackageManager.NameNotFoundException) {
 			lastRefusal = error.message.orEmpty()
 			return null
 		}
@@ -162,6 +182,42 @@ internal class ShiraVpnService :
 		-1
 	}
 
+	/** The phone's IPv4 address on the interface Android makes for the Linux VM, if it's there. */
+	private fun findVmNetwork(): VmNetwork? {
+		val found = try {
+			NetworkInterface.getByName(VmLink.INTERFACE)
+		} catch (error: SocketException) {
+			Log.d(TAG, "couldn't look for the VM's network", error)
+			null
+		} ?: return null
+		val ipv4 = found.interfaceAddresses.firstOrNull { it.address is Inet4Address } ?: return null
+		val bytes = ipv4.address.address
+		val value = ((bytes[0].toInt() and 0xff) shl 24) or ((bytes[1].toInt() and 0xff) shl 16) or
+			((bytes[2].toInt() and 0xff) shl 8) or (bytes[3].toInt() and 0xff)
+		return VmNetwork(value, ipv4.networkPrefixLength.toInt())
+	}
+
+	/** The Terminal's user ID, so that the page's log names it for the VM's connections. */
+	private fun terminalUid(): Int {
+		for (name in TERMINAL_PACKAGES) {
+			try {
+				return packageManager.getPackageUid(name, 0)
+			} catch (_: PackageManager.NameNotFoundException) {
+				continue
+			}
+		}
+		return -1
+	}
+
+	/** Debug builds can listen for the VM on another address, so it can be tested without a VM. */
+	private fun devVmListen(intent: Intent?): Int? {
+		if (!BuildConfig.DEBUG) return null
+		val text = intent?.getStringExtra(EXTRA_DEV_VM_LISTEN) ?: return null
+		val parts = text.split('.').mapNotNull(String::toIntOrNull)
+		if (parts.size != IPV4_PARTS || parts.any { it !in 0..MAX_OCTET }) return null
+		return parts.fold(0) { value, part -> (value shl OCTET_BITS) or part }
+	}
+
 	private fun address(value: Int): InetAddress = InetAddress.getByAddress(
 		byteArrayOf((value ushr 24).toByte(), (value ushr 16).toByte(), (value ushr 8).toByte(), value.toByte()),
 	)
@@ -218,9 +274,23 @@ internal class ShiraVpnService :
 		private const val DEFAULT_ROUTE = "0.0.0.0"
 		private const val VPN_LOOKUP_TRIES = 20
 		private const val VPN_LOOKUP_DELAY_MILLIS = 100L
+		private const val IPV4_PARTS = 4
+		private const val MAX_OCTET = 255
+		private const val OCTET_BITS = 8
 
-		fun start(context: Context) {
-			context.startForegroundService(Intent(context, ShiraVpnService::class.java))
+		/** AOSP's name for the Terminal app, and the one Google ships on Pixels. */
+		private val TERMINAL_PACKAGES = listOf(
+			"com.android.virtualization.terminal",
+			"com.google.android.virtualization.terminal",
+		)
+
+		/** Debug builds only: an address to listen for the VM on instead, like 127.0.0.1 with adb forward. */
+		const val EXTRA_DEV_VM_LISTEN = "dev_vm_listen"
+
+		fun start(context: Context, devVmListen: String? = null) {
+			val intent = Intent(context, ShiraVpnService::class.java)
+			if (devVmListen != null) intent.putExtra(EXTRA_DEV_VM_LISTEN, devVmListen)
+			context.startForegroundService(intent)
 		}
 
 		fun stop(context: Context) {

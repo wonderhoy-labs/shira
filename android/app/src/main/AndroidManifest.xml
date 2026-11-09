@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-	<!-- There's no INTERNET permission. The app's only way out is the cable to the browser. -->
+	<!--
+		The app's only way out is the cable to the browser. INTERNET is only for listening for Android's Linux VM, on
+		the phone's address on the VM's own network, so that the VM's traffic goes through the cable too. It never
+		connects anywhere.
+	-->
+	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<!-- Android 14 needs this before a foreground service can be the connected-device type. -->
 	<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
@@ -9,6 +14,12 @@
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+	<!-- To name the Terminal in the log, for the Linux VM's connections. -->
+	<queries>
+		<package android:name="com.android.virtualization.terminal" />
+		<package android:name="com.google.android.virtualization.terminal" />
+	</queries>
 
 	<application
 		android:allowBackup="false"

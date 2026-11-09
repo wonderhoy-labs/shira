@@ -16,6 +16,7 @@ import com.wonderhoylabs.shira.bridge.PacketHandler
 import com.wonderhoylabs.shira.tunnel.AppPort
 import com.wonderhoylabs.shira.tunnel.OwnerLookup
 import com.wonderhoylabs.shira.tunnel.PagePort
+import com.wonderhoylabs.shira.tunnel.StreamIds
 import com.wonderhoylabs.shira.tunnel.Tunnel
 import com.wonderhoylabs.shira.tunnel.TunnelStats
 import java.io.FileDescriptor
@@ -28,6 +29,12 @@ internal interface LoopHost : OwnerLookup {
 	val lastRefusal: String
 	fun onTunnelUp(server: String, stats: TunnelStats)
 	fun onTunnelDown()
+
+	/** Where the Linux VM's network is, if there is one. */
+	val vmFinder: VmNetworkFinder
+
+	/** The Android user ID to show for the VM's connections in the log: the Terminal's, or -1. */
+	val vmOwner: Int
 }
 
 /**
@@ -123,6 +130,7 @@ internal class BridgeLoop(private val host: LoopHost) {
 		private var headOffset = 0
 		private var tun: ParcelFileDescriptor? = null
 		private var tunnel: Tunnel? = null
+		private var vm: VmBridge? = null
 		private var stats: TunnelStats? = null
 		private var now = SystemClock.elapsedRealtime()
 		private var lastHeard = now
@@ -153,10 +161,11 @@ internal class BridgeLoop(private val host: LoopHost) {
 					tunPoll.events = OsConstants.POLLIN.toShort()
 
 					val wait = if (active != null) TICK_MILLIS else IDLE_POLL_MILLIS
+					val bridge = vm
 					val fds = if (active == null) {
 						arrayOf(peerPoll, serverPoll, wakePoll)
 					} else {
-						arrayOf(peerPoll, serverPoll, wakePoll, tunPoll)
+						arrayOf(peerPoll, serverPoll, wakePoll, tunPoll) + bridge?.pollFds().orEmpty()
 					}
 					Os.poll(fds, wait)
 					now = SystemClock.elapsedRealtime()
@@ -180,14 +189,17 @@ internal class BridgeLoop(private val host: LoopHost) {
 					if (active != null && active === tunnel && tunPoll.revents.toInt() and OsConstants.POLLIN != 0) {
 						readApps(active)
 					}
+					if (active != null && bridge != null && bridge === vm) bridge.afterPoll(now)
 
 					val after = tunnel
 					if (after != null) {
 						if (now - lastTick >= TICK_MILLIS) {
 							lastTick = now
 							after.tick(now)
+							vm?.tick(now)
 						}
 						after.afterBatch(now)
+						vm?.afterBatch(now)
 					}
 					// A socket that's still open but silent is a closed tab. That has to end, or the
 					// VPN would keep the phone's traffic with nowhere to go.
@@ -215,7 +227,7 @@ internal class BridgeLoop(private val host: LoopHost) {
 		}
 
 		private fun updatePause(active: Tunnel?): Boolean {
-			val buffered = active?.downloadBuffered ?: 0
+			val buffered = (active?.downloadBuffered ?: 0) + (vm?.downloadBuffered ?: 0)
 			when {
 				pausedSince == 0L && buffered >= PAUSE_ABOVE_BYTES -> pausedSince = now
 
@@ -227,6 +239,7 @@ internal class BridgeLoop(private val host: LoopHost) {
 
 				pausedSince != 0L && now - pausedSince >= Tunnel.STALLED_MILLIS -> {
 					active?.abortStalledDownload(now)
+					vm?.abortStalledDownload(now)
 					pausedSince = now
 				}
 			}
@@ -264,9 +277,19 @@ internal class BridgeLoop(private val host: LoopHost) {
 		override fun onPacket(type: Int, stream: Int, buffer: ByteArray, offset: Int, length: Int) {
 			when (type) {
 				Link.PING -> Unit
+
 				Link.START -> onStart(buffer, offset, length)
+
 				Link.STOP -> onStop(length >= 1 && buffer[offset].toInt() != 0)
-				else -> tunnel?.onPagePacket(type, stream, buffer, offset, length, now)
+
+				else -> {
+					val bridge = vm
+					if (bridge != null && bridge.owns(stream)) {
+						bridge.onPagePacket(type, stream, buffer, offset, length, now)
+					} else {
+						tunnel?.onPagePacket(type, stream, buffer, offset, length, now)
+					}
+				}
 			}
 		}
 
@@ -282,9 +305,12 @@ internal class BridgeLoop(private val host: LoopHost) {
 				return
 			}
 			val newStats = TunnelStats()
+			val streams = StreamIds()
 			tun = device
 			stats = newStats
-			tunnel = Tunnel(this, this, host, credits, udp, newStats)
+			tunnel = Tunnel(this, this, host, credits, udp, newStats, Tunnel.DEFAULT_MTU, streams)
+			// The VM shares the page, and only gets through while the VPN is up too.
+			vm = VmBridge(this, streams, credits, udp, newStats, host.vmFinder, host.vmOwner, BuildConfig.VERSION_NAME)
 			host.onTunnelUp(server, newStats)
 			send(Link.status(Link.STATUS_UP))
 		}
@@ -297,6 +323,8 @@ internal class BridgeLoop(private val host: LoopHost) {
 
 		private fun bringDown() {
 			val device = tun ?: return
+			vm?.close()
+			vm = null
 			tunnel = null
 			tun = null
 			stats = null
@@ -346,6 +374,7 @@ internal class BridgeLoop(private val host: LoopHost) {
 				}
 			}
 			tunnel?.pumpUploads(now)
+			vm?.pumpUploads(now)
 			return true
 		}
 	}

@@ -7,11 +7,16 @@ import org.junit.Assert.assertEquals
 internal class PageFrame(val type: Int, val stream: Int, val payload: ByteArray)
 
 /** Plays both ends: an app sending packets, and the web page answering for the Wisp server. */
-internal class TunnelHarness(credits: Int = 8, udp: Boolean = true, private val mtu: Int = 1500) {
-	val appAddress = Tunnel.TUN_ADDRESS
+internal class TunnelHarness(
+	credits: Int = 8,
+	udp: Boolean = true,
+	private val mtu: Int = 1500,
+	val appAddress: Int = Tunnel.TUN_ADDRESS,
+	val stats: TunnelStats = TunnelStats(),
+	streams: StreamIds = StreamIds(),
+) {
 	val toApp = ArrayDeque<ByteArray>()
 	val toPage = ArrayDeque<PageFrame>()
-	val stats = TunnelStats()
 	var now = 1_000L
 	var pageQueued = 0
 
@@ -36,6 +41,7 @@ internal class TunnelHarness(credits: Int = 8, udp: Boolean = true, private val 
 		udp,
 		stats,
 		mtu,
+		streams,
 	)
 
 	fun appSegment(

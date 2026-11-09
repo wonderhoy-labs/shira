@@ -18,12 +18,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.wonderhoylabs.shira.BuildConfig
 import com.wonderhoylabs.shira.R
 import com.wonderhoylabs.shira.vpn.ShiraState
 import com.wonderhoylabs.shira.vpn.ShiraVpnService
 
 class MainActivity : ComponentActivity() {
 	private var activateWhenResumed = false
+	private var devVmListen: String? = null
 
 	private val consent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
 		if (result.resultCode == Activity.RESULT_OK) {
@@ -73,6 +75,9 @@ class MainActivity : ComponentActivity() {
 
 	/** The web page opens this screen through the name only adb may use, to say it should turn on. */
 	private fun handleIntent(intent: Intent?) {
+		if (BuildConfig.DEBUG) {
+			intent?.getStringExtra(ShiraVpnService.EXTRA_DEV_VM_LISTEN)?.let { devVmListen = it }
+		}
 		if (intent?.component?.className == "$packageName$ACTIVATE_ALIAS") activateWhenResumed = true
 	}
 
@@ -89,7 +94,7 @@ class MainActivity : ComponentActivity() {
 		) {
 			requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
 		}
-		ShiraVpnService.start(this)
+		ShiraVpnService.start(this, devVmListen)
 	}
 
 	private companion object {
