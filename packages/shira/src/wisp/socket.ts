@@ -21,6 +21,9 @@ function getWebSocketStream(): WebSocketStreamConstructor | undefined {
 /** Waits until it's fine to read more, or returns nothing if it already is. */
 export type ReadGate = () => Promise<void> | undefined;
 
+/** How long close() waits for what's already been sent, if the server isn't taking it. */
+const CLOSE_GRACE_MILLIS = 1_000;
+
 /**
  * A WebSocket that stops reading when the phone can't keep up.
  *
@@ -38,6 +41,9 @@ export class FlowControlledSocket implements client.WispSocket {
 
 	private readonly stream: WebSocketStreamLike;
 	private writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
+	/** Settles once everything sent so far has gone, because writes go out in order. */
+	private lastWrite: Promise<unknown> = Promise.resolve();
+	private closing = false;
 
 	constructor(
 		url: string,
@@ -74,16 +80,36 @@ export class FlowControlledSocket implements client.WispSocket {
 
 	send(data: Uint8Array) {
 		const writer = this.writer;
-		if (!writer) return;
+		// Like a WebSocket that's closing, which drops what it's given.
+		if (!writer || this.closing) return;
 		this.bufferedAmount += data.length;
 		const done = () => {
 			this.bufferedAmount -= data.length;
 		};
-		writer.write(data).then(done, done);
+		const written = writer.write(data);
+		written.then(done, done);
+		this.lastWrite = written;
 	}
 
+	/**
+	 * Closes once what's already been sent has gone, or after a moment if the server isn't taking it.
+	 *
+	 * Chrome's tab crashes (SIGSEGV, in Chrome 156) when WebSocketStream.close() comes in the same task as writes to
+	 * it. Deactivating does exactly that: it closes every Wisp stream, which sends a CLOSE for each, and then the
+	 * connection. So the real close always waits for a task of its own.
+	 */
 	close() {
-		this.stream.close();
+		if (this.closing) return;
+		this.closing = true;
+		let started = false;
+		const closeSoon = () => {
+			if (started) return;
+			started = true;
+			clearTimeout(grace);
+			setTimeout(() => this.stream.close(), 0);
+		};
+		const grace = setTimeout(closeSoon, CLOSE_GRACE_MILLIS);
+		this.lastWrite.then(closeSoon, closeSoon);
 	}
 }
 

@@ -173,12 +173,16 @@ at about 420 Mbit/s down and 390 Mbit/s up. Those numbers are for that path, not
 - password logins: missing, wrong and right
 - a stock wisp-js server, its welcome message, and losing it and getting it back
 - turning Shira off from the page and from the app, closing the tab, and a page that goes silent
+- turning Shira off from the page in Chrome 156 while Chrome on the emulator was loading Wikipedia, five times in a row. Before the
+  page closed the Wisp connection in a task of its own, this crashed the tab every time. Force-stopping the app during a page load
+  didn't crash it, with or without that change.
 - another page taking over
 - keeping other apps out: Android refused another app's connection to the socket, the app refused one from its own user ID, and
   Android refused another app opening the name that turns it on
 
-**Not tried yet:** speed over real USB, replugging the cable, other phones, Windows, Linux, Edge, epoxy-server, a server that only
-speaks Wisp version 1, and a Private DNS provider set by hostname. Password logins have only run against the development server, which checks them the way the protocol
+**Not tried yet:** speed over real USB, replugging the cable, turning Shira off over WebUSB while apps have connections open,
+other phones, Windows, Linux, Edge, epoxy-server, a server that only speaks Wisp version 1, and a Private DNS provider set by
+hostname. Password logins have only run against the development server, which checks them the way the protocol
 describes.
 
 ## How it works
