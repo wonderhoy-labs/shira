@@ -94,3 +94,53 @@ one per question keeps failures simple. A question gets a failure answer if the 
 
 An answer that's too big for the client's UDP limit comes back truncated, and the client asks again over TCP. That connection
 goes through to `1.1.1.1:53` like any other.
+
+# The VM link
+
+Version 1. This is what goes between the app and `shira-vm` in Android's Linux Terminal. The Kotlin version is in
+[`VmLink.kt`](../android/tunnel/src/main/kotlin/com/wonderhoylabs/shira/bridge/VmLink.kt) and the Rust one in
+[`link.rs`](../crates/shira-vm/src/link.rs). Their tests check the same bytes.
+
+## Why it exists
+
+Android gives the Terminal's VM its network through a tap interface, `avf_tap_fixed`, which it serves the way it serves a
+hotspot (`TETHERING_VIRTUAL`). Tethering picks its upstream from the system's default network, which a VPN never is, so the
+VM's traffic is forwarded straight out of the phone and Shira's VPN never sees it.
+
+## The socket
+
+While the VPN is up, the app listens on TCP port 47830 on its own address on `avf_tap_fixed`, and nowhere else. It takes a
+connection only from the rest of that interface's subnet, so the phone's own apps, which would come from the app's address,
+can't use it. A new connection replaces the old one. When the VPN goes down, the app closes both.
+
+The app leaves itself out of its own VPN. Android only lets the apps inside a VPN receive packets on the VPN's interface,
+and would route the app's answers into the VPN.
+
+## Frames
+
+| Bytes | Value |
+| --- | --- |
+| 4 | Length of everything after this field, little-endian, at most 65,536 |
+| 1 | Type |
+| n | Payload |
+
+| Type | Name | From | Payload |
+| --- | --- | --- | --- |
+| `0x01` | HELLO | App, first | The protocol version in 1 byte, the VM's address and resolver in 4 bytes each, most significant first, the MTU in 2 little-endian bytes, then the app's version as text |
+| `0x02` | PACKET | Both | One IPv4 packet |
+
+The app ends the VM's packets in a second `Tunnel` that shares the page with the phone's own. Its streams take IDs from the
+same counter, so the page can't tell them apart, and its DNS goes to the same resolver at `10.219.0.2`. The VM is `10.219.0.3`.
+
+## Inside the VM
+
+`shira-vm` adds policy routing rules before anything else, and leaves them there when it stops:
+
+| Priority | Rule |
+| --- | --- |
+| 5300 | DNS (UDP and TCP 53, TCP 853) to the local networks is unreachable, because the phone answers it from its own network |
+| 5301 | The local networks, link-local and multicast use the main table, but never its default route |
+| 5302 | Everything else uses table 5302, which only has a default route into `shira0` while the link is up |
+| 5303 | Whatever's left is unreachable, for IPv4 and IPv6 |
+
+So the VM reaches the phone, the Terminal app that shows it, and Shira's port, and nothing else unless the link is up.

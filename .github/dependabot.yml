@@ -26,6 +26,16 @@ updates:
       npm:
         patterns: ["*"]
 
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      cargo:
+        patterns: ["*"]
+
   - package-ecosystem: gradle
     directory: /android
     schedule:

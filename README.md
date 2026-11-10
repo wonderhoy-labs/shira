@@ -67,6 +67,27 @@ for. An app that does its own secure DNS shows up with addresses, because the re
 
 The log only exists in that tab. It's never sent anywhere, and it's gone when you close it. It keeps the latest 20,000 rows.
 
+### Android's Linux Terminal
+
+**Not released yet, and not tested on a phone.** The Terminal's Debian VM doesn't go through any VPN, Shira's included:
+Android forwards its traffic straight out of the phone the way it does a hotspot's. `shira-vm` fixes that from inside the VM.
+It sends the VM's traffic to the Shira app while Shira is connected, and blocks it the rest of the time, even when `shira-vm`
+itself isn't running. The VM can always reach the phone, so the Terminal keeps working.
+
+Install it once, in the Terminal. Download it before you install it, because the VM can't get out without Shira afterwards:
+
+```bash
+curl -LO https://github.com/wonderhoy-labs/shira/releases/latest/download/shira-vm-aarch64-unknown-linux-musl.tar.gz
+```
+
+```bash
+tar xzf shira-vm-aarch64-unknown-linux-musl.tar.gz && sudo ./shira-vm install
+```
+
+`shira-vm status` says whether it's connected or blocking. `sudo shira-vm uninstall` takes it all away, and the VM uses the
+phone's own network again. The VM's connections show up in the log under the Terminal app. The link is in
+[docs/protocol.md](docs/protocol.md#the-vm-link).
+
 ## Use it in your app
 
 Shira is two libraries, and its own page and app are built on them.
@@ -179,6 +200,21 @@ at about 420 Mbit/s down and 390 Mbit/s up. Those numbers are for that path, not
 - another page taking over
 - keeping other apps out: Android refused another app's connection to the socket, the app refused one from its own user ID, and
   Android refused another app opening the name that turns it on
+
+**`shira-vm`, the Linux Terminal's part,** has only run in a Debian trixie Docker container on the Mac (arm64, Linux 6.12),
+standing in for the VM. It reached the app on the emulator through `adb forward` with `--server`, because an emulator can't run
+the Terminal. That's a debug build listening on 127.0.0.1 instead of the VM's interface.
+
+- With nothing to connect to, it put its rules in. `curl` to example.com and to 1.1.1.1 failed with "network unreachable", DNS
+  to the container's gateway was refused, and `shira-vm status` said it was blocking.
+- Connected, DNS went through the phone's resolver, HTTPS to example.com and ifconfig.me worked, `apt-get install` of a small
+  package worked, IPv6 was refused, and every connection showed up in the page's log.
+- **Not working yet:** a 100 MB download stopped after a few KB, and after that the whole page link stopped moving, the
+  phone's own traffic included. An NTP request over UDP got no answer. The cause isn't known. In this setup the VM's traffic
+  went through the same `adb` connection as the page's, which it doesn't on a phone, so it may be the setup, but that hasn't
+  been shown.
+- **Not tried:** the Terminal on a phone, `install` and `uninstall` under systemd, turning Shira off while the VM is
+  connected, and checking that the VM's public address is the Wisp server's.
 
 **Not tried yet:** speed over real USB, replugging the cable, turning Shira off over WebUSB while apps have connections open,
 other phones, Windows, Linux, Edge, epoxy-server, a server that only speaks Wisp version 1, and a Private DNS provider set by
@@ -342,6 +378,7 @@ pnpm install && pnpm format && pnpm unify
 | `web/src/shira/controller.ts` | Everything the page does, step by step |
 | `web/src/ui/` | The page's screens, using [mdui](https://github.com/zdhxiong/mdui) for Material 3 |
 | `web/plugins/` | The Vite plugin: the APK, and the development servers |
+| `crates/shira-vm/` | `shira-vm`, for Android's Linux Terminal. Cross-compile it with `CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld cargo build --release -p shira-vm --target aarch64-unknown-linux-musl` |
 | `VERSION` | The version, for both the app and the page |
 | `tools/` | The shared Wonderhoy Labs tools: `theme.ts` makes the colours, `unify.ts` checks the guideline |
 

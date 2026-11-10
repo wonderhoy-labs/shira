@@ -21,12 +21,14 @@ is at <https://wonderhoy-labs.github.io/shira/>.
 | `web/src/adb/` | Reaching the phone over WebUSB or the adb server |
 | `web/src/shira/controller.ts` | Everything the page does, step by step |
 | `web/plugins/` | The Vite plugin: the APK, the notices, and the development Wisp and adb servers |
+| `crates/shira-vm/` | The tool for Android's Linux Terminal: the VM's packets to the app over TCP, and routing rules that block the rest |
 
 ## Build, test and format
 
 ```bash
 pnpm install && pnpm unify
 cd android && ./gradlew spotlessApply :tunnel:testDebugUnitTest :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cd packages/shira && pnpm test
 cd web && pnpm build
 ```

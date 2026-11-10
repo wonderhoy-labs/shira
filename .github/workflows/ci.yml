@@ -46,9 +46,21 @@ jobs:
       apk-artifact: shira-apk
       library: shira
 
+  # shira-vm runs in Android's Linux VM: arm64 on phones, x86_64 on some others. Static, so it runs on any distribution.
+  rust:
+    uses: wonderhoy-labs/.github/.github/workflows/rust.yml@main
+    with:
+      package: shira-vm
+      linux-rustflags: -C linker=rust-lld
+      targets: >-
+        [
+          {"os": "ubuntu-24.04", "target": "x86_64-unknown-linux-musl"},
+          {"os": "ubuntu-24.04-arm", "target": "aarch64-unknown-linux-musl"}
+        ]
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [checks, android, web]
+    needs: [checks, rust, android, web]
     permissions:
       contents: write
       id-token: write
