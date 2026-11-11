@@ -186,6 +186,11 @@ at about 420 Mbit/s down and 390 Mbit/s up. Those numbers are for that path, not
 - keeping other apps out: Android refused another app's connection to the socket, the app refused one from its own user ID, and
   Android refused another app opening the name that turns it on
 
+**Shira 0.3.0's upstreams,** on the same emulator with Wi-Fi and data off: Shira's own page through its development
+Wisp server (Wisp v2, DNS and TCP from Google Play services), and [Shiho](https://github.com/wonderhoy-labs/shiho)'s Direct
+Sockets upstream from an Isolated Web App in Chrome for Testing 156 (Chrome on the emulator over TCP and QUIC). The app didn't
+change in 0.3.0.
+
 **Not tried yet:** speed over real USB, replugging the cable, turning Shira off over WebUSB while apps have connections open,
 other phones, Windows, Linux, Edge, epoxy-server, a server that only speaks Wisp version 1, and a Private DNS provider set by
 hostname. Password logins have only run against the development server, which checks them the way the protocol
