@@ -76,7 +76,7 @@ relays every connection through a Wisp server, keeps going when the server drops
 [Asahi](https://github.com/wonderhoy-labs/asahi) uses it. Add a release by its address:
 
 ```json
-"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.3.0/wonderhoy-labs-shira-0.3.0.tgz"
+"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.4.0/wonderhoy-labs-shira-0.4.0.tgz"
 ```
 
 Bring an `Adb` from [Tango](https://github.com/yume-chan/ya-webadb), over WebUSB or the `adb` server:
@@ -131,12 +131,38 @@ packets, and the framing that carries them over a socket, with nothing else from
 [the library notes](.claude/skills/wonderhoy-unification/reference/library.md#android-libraries), then:
 
 ```kotlin
-implementation("shira:tunnel:0.3.0@aar")
+implementation("shira:tunnel:0.4.0@aar")
 ```
 
 `Tunnel` takes packets from the device with `onAppPacket` and frames from the socket with `onPagePacket`, and
 writes back through the `AppPort` and `PagePort` you give it. `Link` makes and reads the frames. It needs only the
 Kotlin standard library.
+
+**`shira-vpn`** is the rest of the app's phone side: the VPN service that waits for a page over `adb`, and the loop
+between the page's socket and the tunnel. Shira's app is built on it, and so is
+[Shiho](https://github.com/wonderhoy-labs/shiho)'s, each with its own name and socket. Each release has it as
+`shira-vpn-<version>.aar`, and it needs `shira-tunnel`, `androidx.core:core-ktx`, `androidx.activity:activity` and
+`kotlinx-coroutines-core` next to it:
+
+```kotlin
+implementation("shira:tunnel:0.4.0@aar")
+implementation("shira:vpn:0.4.0@aar")
+```
+
+Subclass `LinkVpnService` with your socket name, version, words (`LinkTexts`) and notification icon, declare it in
+the manifest as a VPN service of the `connectedDevice` type, and add an `<activity-alias android:name=".Activate">`
+of your activity with `android:permission="android.permission.DUMP"`, so only `adb` can turn it on. `VpnActivation`
+does the rest from your activity, and `VpnState` says what the service is doing. On the page, give Shira's `Phone`
+your app as a `LinkApp`:
+
+```ts
+const phone = new Phone(adb, "My phone", "usb", {
+	package: "com.example.app",
+	service: "com.example.app/.MyVpnService",
+	activateScreen: "com.example.app/.Activate",
+	socket: "localabstract:example",
+});
+```
 
 ## Wisp servers
 
@@ -190,6 +216,10 @@ at about 420 Mbit/s down and 390 Mbit/s up. Those numbers are for that path, not
 Wisp server (Wisp v2, DNS and TCP from Google Play services), and [Shiho](https://github.com/wonderhoy-labs/shiho)'s Direct
 Sockets upstream from an Isolated Web App in Chrome for Testing 156 (Chrome on the emulator over TCP and QUIC). The app didn't
 change in 0.3.0.
+
+**Shira 0.4.0's app on the `shira-vpn` library,** on the same emulator with Wi-Fi and data off: the release APK updated
+0.3.0 in place, the page activated it through its development Wisp server, the app and its notification said
+"Connected through localhost:5301", and its own Deactivate button turned the VPN off and the page stood down.
 
 **Not tried yet:** speed over real USB, replugging the cable, turning Shira off over WebUSB while apps have connections open,
 other phones, Windows, Linux, Edge, epoxy-server, a server that only speaks Wisp version 1, and a Private DNS provider set by
@@ -345,6 +375,7 @@ pnpm install && pnpm format && pnpm unify
 
 | Where | What's in it |
 | --- | --- |
+| `android/vpn/` | The `shira-vpn` library: the VPN service, its activation and the bridge to the page, which Shira's app and Shiho's subclass |
 | `android/tunnel/` | The `shira-tunnel` library: the TCP, UDP and DNS side, and the messages on the socket, with nothing Android-specific so that it can be tested on its own |
 | `android/app/src/main/kotlin/com/wonderhoylabs/shira/vpn/` | The service, and the thread that moves everything |
 | `android/app/src/main/kotlin/com/wonderhoylabs/shira/ui/` | The app's screen |

@@ -1,6 +1,6 @@
 {
 	"name": "@wonderhoy-labs/shira",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "A phone's network through a web page, over adb and a Wisp server, with a log of every connection.",
 	"license": "Apache-2.0",
 	"type": "module",

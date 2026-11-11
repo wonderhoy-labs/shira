@@ -261,7 +261,7 @@ export class Relay {
 /** The app on the phone is too old or too new for this page. */
 export class ProtocolMismatchError extends Error {
 	constructor(readonly appVersion: string) {
-		super(`Shira ${appVersion} on the phone doesn't match this page.`);
+		super(`The app on the phone, version ${appVersion}, doesn't match this page.`);
 		this.name = "ProtocolMismatchError";
 	}
 }

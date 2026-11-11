@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<!-- What a LinkVpnService needs. There's no INTERNET permission: the only way out is the cable to the page. -->
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<!-- Android 14 needs this before a foreground service can be the connected-device type. -->
+	<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+	<uses-permission android:name="android.permission.WAKE_LOCK" />
+</manifest>
