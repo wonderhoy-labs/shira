@@ -26,8 +26,10 @@ jobs:
       env-prefix: SHIRA
       gradle-tasks: >-
         spotlessCheck :tunnel:testDebugUnitTest :tunnel:lintRelease :tunnel:assembleRelease
-        :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintRelease :app:assembleRelease
-      library-files: tunnel/build/outputs/aar/tunnel-release.aar
+        :vpn:lintRelease :vpn:assembleRelease :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintRelease :app:assembleRelease
+      library-files: |
+        tunnel/build/outputs/aar/tunnel-release.aar
+        vpn/build/outputs/aar/vpn-release.aar
     secrets:
       KEYSTORE_BASE64: ${{ secrets.SHIRA_KEYSTORE_BASE64 }}
       KEYSTORE_PASSWORD: ${{ secrets.SHIRA_KEYSTORE_PASSWORD }}

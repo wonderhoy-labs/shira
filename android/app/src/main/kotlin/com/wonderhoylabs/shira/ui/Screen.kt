@@ -43,12 +43,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wonderhoylabs.shira.R
 import com.wonderhoylabs.shira.tunnel.TunnelStats
-import com.wonderhoylabs.shira.vpn.ShiraStatus
+import com.wonderhoylabs.shira.vpn.VpnStatus
 import kotlinx.coroutines.delay
 
 private const val STATS_REFRESH_MILLIS = 1_000L
 
-data class ScreenState(val status: ShiraStatus, val error: String?)
+data class ScreenState(val status: VpnStatus, val error: String?)
 
 class ScreenActions(val onActivate: () -> Unit, val onDeactivate: () -> Unit, val onDismissError: () -> Unit)
 
@@ -74,7 +74,7 @@ fun ShiraScreen(state: ScreenState, actions: ScreenActions) {
 			}
 			StatusCard(state.status)
 			when (state.status) {
-				ShiraStatus.Off -> Button(onClick = actions.onActivate, modifier = Modifier.fillMaxWidth()) {
+				VpnStatus.Off -> Button(onClick = actions.onActivate, modifier = Modifier.fillMaxWidth()) {
 					Text(stringResource(R.string.activate))
 				}
 
@@ -82,7 +82,7 @@ fun ShiraScreen(state: ScreenState, actions: ScreenActions) {
 					Text(stringResource(R.string.deactivate))
 				}
 			}
-			if (state.status !is ShiraStatus.Connected) Steps()
+			if (state.status !is VpnStatus.Connected) Steps()
 		}
 	}
 }
@@ -105,8 +105,8 @@ private fun ErrorCard(message: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun StatusCard(status: ShiraStatus) {
-	val connected = status is ShiraStatus.Connected
+private fun StatusCard(status: VpnStatus) {
+	val connected = status is VpnStatus.Connected
 	Card(
 		colors = CardDefaults.cardColors(
 			containerColor = if (connected) {
@@ -118,26 +118,26 @@ private fun StatusCard(status: ShiraStatus) {
 	) {
 		Column(modifier = Modifier.padding(20.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
 			Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-				if (status == ShiraStatus.Waiting) {
+				if (status == VpnStatus.Waiting) {
 					CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp)
 				}
 				Text(
 					text = stringResource(
 						when (status) {
-							ShiraStatus.Off -> R.string.status_off
-							ShiraStatus.Waiting -> R.string.status_waiting
-							is ShiraStatus.Connected -> R.string.status_connected
+							VpnStatus.Off -> R.string.status_off
+							VpnStatus.Waiting -> R.string.status_waiting
+							is VpnStatus.Connected -> R.string.status_connected
 						},
 					),
 					style = MaterialTheme.typography.titleLarge,
 				)
 			}
 			when (status) {
-				ShiraStatus.Off -> Hint(stringResource(R.string.status_off_body))
+				VpnStatus.Off -> Hint(stringResource(R.string.status_off_body))
 
-				ShiraStatus.Waiting -> Hint(stringResource(R.string.status_waiting_body))
+				VpnStatus.Waiting -> Hint(stringResource(R.string.status_waiting_body))
 
-				is ShiraStatus.Connected -> {
+				is VpnStatus.Connected -> {
 					Text(
 						text = stringResource(R.string.status_connected_body, status.server),
 						style = MaterialTheme.typography.bodyMedium,

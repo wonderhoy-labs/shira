@@ -1,6 +1,6 @@
 import type { Adb } from "@yume-chan/adb";
 import { PackageManager } from "@yume-chan/android-bin";
-import { ACTIVATE_SCREEN, PACKAGE, SERVICE, SOCKET } from "./constants";
+import { type LinkApp, SHIRA_APP } from "./constants";
 
 export type PhoneKind = "usb" | "adb-server";
 
@@ -21,6 +21,8 @@ export class Phone {
 		readonly adb: Adb,
 		readonly name: string,
 		readonly kind: PhoneKind,
+		/** The app on the phone that carries its network. Shira's own, unless another app built on its library. */
+		readonly app: LinkApp = SHIRA_APP,
 	) {}
 
 	get disconnected(): Promise<unknown> {
@@ -32,7 +34,9 @@ export class Phone {
 	}
 
 	async appInfo(): Promise<AppInfo> {
-		const output = await this.shell(`dumpsys package ${PACKAGE} | grep -E 'versionCode=|versionName=' | head -2`);
+		const output = await this.shell(
+			`dumpsys package ${this.app.package} | grep -E 'versionCode=|versionName=' | head -2`,
+		);
 		const code = /versionCode=(\d+)/.exec(output)?.[1];
 		const name = /versionName=(\S+)/.exec(output)?.[1];
 		return {
@@ -71,7 +75,7 @@ export class Phone {
 	}
 
 	async uninstall(): Promise<void> {
-		await this.shell(`pm uninstall ${PACKAGE}`);
+		await this.shell(`pm uninstall ${this.app.package}`);
 	}
 
 	/**
@@ -81,20 +85,20 @@ export class Phone {
 	 * the notification permission that shows Shira's running. The screen that opens then starts the service.
 	 */
 	async activate(): Promise<void> {
-		await this.shell(`pm grant ${PACKAGE} android.permission.POST_NOTIFICATIONS 2>/dev/null`);
-		await this.shell(`appops set ${PACKAGE} ACTIVATE_VPN allow`);
-		const output = await this.shell(`am start -n ${ACTIVATE_SCREEN}`);
+		await this.shell(`pm grant ${this.app.package} android.permission.POST_NOTIFICATIONS 2>/dev/null`);
+		await this.shell(`appops set ${this.app.package} ACTIVATE_VPN allow`);
+		const output = await this.shell(`am start -n ${this.app.activateScreen}`);
 		if (/^Error/m.test(output)) throw new Error(output.trim());
 	}
 
 	/** True once the app's own service is running, which is what makes the socket's name safely its own. */
 	async isServiceRunning(): Promise<boolean> {
-		const output = await this.shell(`dumpsys activity services ${SERVICE}`);
+		const output = await this.shell(`dumpsys activity services ${this.app.service}`);
 		return output.includes("ServiceRecord");
 	}
 
 	openSocket() {
-		return this.adb.createSocket(SOCKET);
+		return this.adb.createSocket(this.app.socket);
 	}
 
 	/** Which package each app ID belongs to, for the log. */

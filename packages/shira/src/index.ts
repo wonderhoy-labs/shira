@@ -5,7 +5,7 @@
 
 /// <reference path="./wisp-js.d.ts" />
 
-export { ACTIVATE_SCREEN, PACKAGE, SCREEN, SERVICE, SOCKET } from "./constants";
+export { ACTIVATE_SCREEN, type LinkApp, PACKAGE, SCREEN, SERVICE, SHIRA_APP, SOCKET } from "./constants";
 export { PROTOCOL_VERSION } from "./link/frames";
 export { ProtocolMismatchError } from "./link/relay";
 export {

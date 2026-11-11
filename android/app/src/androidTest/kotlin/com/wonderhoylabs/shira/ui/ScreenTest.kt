@@ -15,7 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.wonderhoylabs.shira.tunnel.TunnelStats
-import com.wonderhoylabs.shira.vpn.ShiraStatus
+import com.wonderhoylabs.shira.vpn.VpnStatus
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -33,7 +33,7 @@ class ScreenTest {
 		onDismissError = { calls += "dismiss" },
 	)
 
-	private fun show(status: ShiraStatus, error: String? = null, dark: Boolean = false) {
+	private fun show(status: VpnStatus, error: String? = null, dark: Boolean = false) {
 		// The spinner never stops, so the test's clock only moves when it's told to.
 		rule.mainClock.autoAdvance = false
 		rule.setContent {
@@ -58,7 +58,7 @@ class ScreenTest {
 		File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 	}
 
-	private fun connected() = ShiraStatus.Connected(
+	private fun connected() = VpnStatus.Connected(
 		"wisp.example.com",
 		TunnelStats().apply {
 			bytesDown = 52_428_800
@@ -69,7 +69,7 @@ class ScreenTest {
 
 	@Test
 	fun off() {
-		show(ShiraStatus.Off)
+		show(VpnStatus.Off)
 		rule.onNodeWithText("Off").assertIsDisplayed()
 		rule.onNodeWithText("How to connect").assertIsDisplayed()
 		picture("off")
@@ -79,7 +79,7 @@ class ScreenTest {
 
 	@Test
 	fun waiting() {
-		show(ShiraStatus.Waiting)
+		show(VpnStatus.Waiting)
 		rule.onNodeWithText("Waiting for your computer").assertIsDisplayed()
 		picture("waiting")
 		click("Deactivate")
@@ -101,7 +101,7 @@ class ScreenTest {
 
 	@Test
 	fun errorCanBeDismissed() {
-		show(ShiraStatus.Off, error = "Android needs your OK before Shira can act as a VPN.")
+		show(VpnStatus.Off, error = "Android needs your OK before Shira can act as a VPN.")
 		rule.onNodeWithText("Android needs your OK before Shira can act as a VPN.").assertIsDisplayed()
 		picture("error")
 		click("Dismiss")
@@ -110,7 +110,7 @@ class ScreenTest {
 
 	@Test
 	fun darkOff() {
-		show(ShiraStatus.Off, dark = true)
+		show(VpnStatus.Off, dark = true)
 		picture("off-dark")
 	}
 
@@ -123,7 +123,7 @@ class ScreenTest {
 	@Test
 	fun darkError() {
 		show(
-			ShiraStatus.Waiting,
+			VpnStatus.Waiting,
 			error = "Another VPN has taken over. Open Shira on the phone and activate it again.",
 			dark = true,
 		)

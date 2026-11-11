@@ -9,7 +9,6 @@ import android.system.Os
 import android.system.OsConstants
 import android.system.StructPollfd
 import android.util.Log
-import com.wonderhoylabs.shira.BuildConfig
 import com.wonderhoylabs.shira.bridge.FrameReader
 import com.wonderhoylabs.shira.bridge.Link
 import com.wonderhoylabs.shira.bridge.PacketHandler
@@ -22,7 +21,7 @@ import java.io.FileDescriptor
 import java.io.IOException
 
 /** What the loop needs from the service. */
-internal interface LoopHost : OwnerLookup {
+interface LoopHost : OwnerLookup {
 	/** Brings the VPN up. Null means Android refused, and [lastRefusal] says why. */
 	fun establish(): ParcelFileDescriptor?
 	val lastRefusal: String
@@ -35,7 +34,13 @@ internal interface LoopHost : OwnerLookup {
  * VPN's device. The VPN only exists while a page is attached and connected to a Wisp server, so the
  * phone's own network keeps working the rest of the time.
  */
-internal class BridgeLoop(private val host: LoopHost) {
+class BridgeLoop(
+	private val host: LoopHost,
+	/** The abstract socket name the page opens as `localabstract:<name>`. */
+	private val socketName: String,
+	/** The app's version, which the page hears in HELLO. */
+	private val appVersion: String,
+) {
 	@Volatile private var stopping = false
 	private val wakeRead: FileDescriptor
 	private val wakeWrite: FileDescriptor
@@ -62,7 +67,7 @@ internal class BridgeLoop(private val host: LoopHost) {
 	@Throws(IOException::class)
 	fun run() {
 		val server = try {
-			LocalServerSocket(Link.SOCKET_NAME)
+			LocalServerSocket(socketName)
 		} catch (error: IOException) {
 			closeWake()
 			throw error
@@ -141,7 +146,7 @@ internal class BridgeLoop(private val host: LoopHost) {
 			val wakePoll = poll(wakeRead, OsConstants.POLLIN)
 			val tunPoll = StructPollfd()
 			try {
-				send(Link.hello(BuildConfig.VERSION_NAME))
+				send(Link.hello(appVersion))
 				while (!stopping) {
 					if (!flushOutgoing()) return null
 					val active = tunnel
