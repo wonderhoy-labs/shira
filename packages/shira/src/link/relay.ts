@@ -1,6 +1,5 @@
-import type { client } from "@mercuryworkshop/wisp-js/client";
 import type { Adb } from "@yume-chan/adb";
-import type { WispConnection } from "../wisp/connection";
+import type { Upstream, UpstreamStream } from "../upstream";
 import {
 	CLOSE_NETWORK_ERROR,
 	CLOSE_VOLUNTARY,
@@ -26,7 +25,7 @@ import {
 
 type AdbSocket = Awaited<ReturnType<Adb["createSocket"]>>;
 
-/** Above this much on its way to the phone, the page stops reading from the Wisp server. */
+/** Above this much on its way to the phone, the page stops reading from the upstream. */
 const PHONE_QUEUE_HIGH_BYTES = 2 * 1024 * 1024;
 const PHONE_QUEUE_LOW_BYTES = 512 * 1024;
 /** Above this much on its way to the server, the page stops reading from the phone. */
@@ -47,14 +46,14 @@ export interface RelayEvents {
 }
 
 /**
- * Carries Wisp between the app and the server: the app's CONNECT, DATA and CLOSE go out through wisp-js, and
- * what the server sends comes back. It keeps a count of everything for the log along the way.
+ * Carries the app's streams to an upstream: the app's CONNECT, DATA and CLOSE go out through it, and what comes
+ * back goes to the app. It keeps a count of everything for the log along the way.
  */
 export class Relay {
 	private readonly writer: WritableStreamDefaultWriter<Uint8Array>;
 	private readonly decoder = new FrameDecoder();
-	private readonly streams = new Map<number, client.ClientStream>();
-	private wisp: WispConnection | null = null;
+	private readonly streams = new Map<number, UpstreamStream>();
+	private upstream: Upstream | null = null;
 	private phoneQueuedBytes = 0;
 	private drained: (() => void) | null = null;
 	private ended = false;
@@ -88,27 +87,27 @@ export class Relay {
 		return hello;
 	}
 
-	/** Starts using a Wisp connection, and asks the app to bring the VPN up. */
-	attach(wisp: WispConnection, serverLabel: string) {
-		this.wisp = wisp;
-		this.send(encodeStart(wisp.max_buffer_size ?? 0, wisp.udp_enabled, serverLabel));
+	/** Starts using an upstream, and asks the app to bring the VPN up. */
+	attach(upstream: Upstream) {
+		this.upstream = upstream;
+		this.send(encodeStart(upstream.credits, upstream.udp, upstream.label));
 	}
 
-	/** The Wisp connection is gone, so the VPN goes down until there's another. */
+	/** The upstream is gone, so the VPN goes down until there's another. */
 	detach() {
 		this.closeAllStreams(CLOSE_NETWORK_ERROR);
-		this.wisp = null;
+		this.upstream = null;
 		this.send(encodeStop(false));
 	}
 
 	/** Turns Shira off on the phone altogether. */
 	deactivate() {
 		this.closeAllStreams(CLOSE_VOLUNTARY);
-		this.wisp = null;
+		this.upstream = null;
 		this.send(encodeStop(true));
 	}
 
-	/** Waits until it's fine to read more from the Wisp server. */
+	/** Waits until it's fine to read more from the upstream. */
 	readonly downloadGate = (): Promise<void> | undefined => {
 		if (this.phoneQueuedBytes < PHONE_QUEUE_HIGH_BYTES) return undefined;
 		return new Promise((resolve) => {
@@ -130,8 +129,8 @@ export class Relay {
 				for (const packet of this.decoder.push(value)) {
 					this.onPacket(packet);
 				}
-				// The server's connection is slower than the phone. Stop here, and the phone holds back too.
-				while ((this.wisp?.unsentBytes ?? 0) > SERVER_QUEUE_HIGH_BYTES) {
+				// The upstream is slower than the phone. Stop here, and the phone holds back too.
+				while ((this.upstream?.unsentBytes ?? 0) > SERVER_QUEUE_HIGH_BYTES) {
 					await new Promise((resolve) => setTimeout(resolve, SERVER_POLL_MILLIS));
 				}
 			}
@@ -174,36 +173,34 @@ export class Relay {
 
 	private openStream(id: number, request: ConnectRequest) {
 		this.events.onStreamOpen(id, request);
-		let stream: client.ClientStream;
+		let stream: UpstreamStream;
 		try {
-			if (!this.wisp) throw new Error("not connected");
-			stream = this.wisp.create_stream(request.host, request.port, request.streamType);
+			if (!this.upstream) throw new Error("not connected");
+			stream = this.upstream.openStream(request.host, request.port, request.streamType, {
+				onData: (data) => {
+					if (!this.streams.has(id)) return;
+					this.events.onStreamData(id, 0, data.length);
+					for (let at = 0; at < data.length; at += MAX_DATA_BYTES) {
+						this.send(encodeData(id, data.subarray(at, at + MAX_DATA_BYTES)));
+					}
+				},
+				onContinue: (credits) => {
+					if (this.streams.has(id)) this.send(encodeContinue(id, credits));
+				},
+				onClose: (reason) => {
+					// Only if it wasn't the phone that closed it.
+					if (this.streams.delete(id)) {
+						this.send(encodeClose(id, reason ?? CLOSE_NETWORK_ERROR));
+						this.events.onStreamClose(id, reason);
+					}
+				},
+			});
 		} catch (error) {
 			console.warn("couldn't open a stream", error);
 			this.send(encodeClose(id, CLOSE_NETWORK_ERROR));
 			this.events.onStreamClose(id, CLOSE_NETWORK_ERROR);
 			return;
 		}
-		stream.onmessage = (data) => {
-			this.events.onStreamData(id, 0, data.length);
-			for (let at = 0; at < data.length; at += MAX_DATA_BYTES) {
-				this.send(encodeData(id, data.subarray(at, at + MAX_DATA_BYTES)));
-			}
-		};
-		stream.onclose = (reason) => {
-			// Only if it wasn't the phone that closed it.
-			if (this.streams.delete(id)) {
-				this.send(encodeClose(id, reason ?? CLOSE_NETWORK_ERROR));
-				this.events.onStreamClose(id, reason);
-			}
-		};
-		// wisp-js has no event for this, and the phone needs to know how much it can send. The wisp-js stream
-		// keeps its own count too, so if the two drift apart it holds packets back rather than overrunning.
-		const received = stream.continue_received.bind(stream);
-		stream.continue_received = (credits) => {
-			received(credits);
-			this.send(encodeContinue(id, credits));
-		};
 		this.streams.set(id, stream);
 	}
 
@@ -214,7 +211,7 @@ export class Relay {
 		this.events.onStreamClose(id, reason);
 	}
 
-	/** [logged] is what goes in the log. The server always hears that it's a voluntary close. */
+	/** [logged] is what goes in the log. The upstream always hears that it's a voluntary close. */
 	private closeAllStreams(logged: number) {
 		const streams = [...this.streams.entries()];
 		this.streams.clear();
@@ -256,7 +253,7 @@ export class Relay {
 		this.drained?.();
 		this.drained = null;
 		this.closeAllStreams(CLOSE_NETWORK_ERROR);
-		this.wisp = null;
+		this.upstream = null;
 		this.events.onEnded();
 	}
 }

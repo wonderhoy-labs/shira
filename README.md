@@ -76,7 +76,7 @@ relays every connection through a Wisp server, keeps going when the server drops
 [Asahi](https://github.com/wonderhoy-labs/asahi) uses it. Add a release by its address:
 
 ```json
-"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.2.2/wonderhoy-labs-shira-0.2.2.tgz"
+"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.3.0/wonderhoy-labs-shira-0.3.0.tgz"
 ```
 
 Bring an `Adb` from [Tango](https://github.com/yume-chan/ya-webadb), over WebUSB or the `adb` server:
@@ -110,6 +110,12 @@ link.start("auto");
 | `Phone` | The app on the phone: its version, installing it, starting the VPN and opening its socket |
 | `LogStore`, `format…`, `describe…` | Every connection, with its app, bytes and how it ended, and words for them |
 | `connectWisp`, `normalizeServerUrl` | Checking a Wisp server, with or without a login |
+| `Upstream`, `UpstreamConnector`, `wispUpstream` | Where the phone's connections go, for sending them somewhere other than a Wisp server |
+
+A Wisp server is only the default. Pass `upstream` instead of `serverUrl` to send the phone's connections anywhere
+else: an `UpstreamConnector` makes `Upstream`s, which open a TCP or UDP stream for each of the phone's connections and
+say how many packets each can take, as Wisp's CONTINUE does. [Shiho](https://github.com/wonderhoy-labs/shiho) uses it
+to open them itself from the computer with Direct Sockets.
 
 It needs a bundler that understands `?url`, such as Vite, and a phone that allows USB debugging. It runs on wisp-js
 from Wonderhoy Labs' fork, which pnpm won't fetch from git for a dependency's dependency, so add it next to the library,
@@ -125,7 +131,7 @@ packets, and the framing that carries them over a socket, with nothing else from
 [the library notes](.claude/skills/wonderhoy-unification/reference/library.md#android-libraries), then:
 
 ```kotlin
-implementation("shira:tunnel:0.2.2@aar")
+implementation("shira:tunnel:0.3.0@aar")
 ```
 
 `Tunnel` takes packets from the device with `onAppPacket` and frames from the socket with `onPagePacket`, and

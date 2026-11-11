@@ -1,7 +1,7 @@
 // Shira as a library: a phone's network through a web page, over adb and a Wisp server.
 //
 // Install the app this package carries ("@wonderhoy-labs/shira/shira.apk") with a Phone around a Tango Adb, then
-// run a ShiraLink to a Wisp server. Every connection the phone makes is written to a LogStore.
+// run a ShiraLink to a Wisp server, or to another Upstream. Every connection the phone makes is written to a LogStore.
 
 /// <reference path="./wisp-js.d.ts" />
 
@@ -29,6 +29,15 @@ export {
 	type StopReason,
 } from "./shira-link";
 export {
+	type ReadGate,
+	type Upstream,
+	type UpstreamConnector,
+	type UpstreamDetails,
+	UpstreamError,
+	type UpstreamStream,
+	type UpstreamStreamEvents,
+} from "./upstream";
+export {
 	connectWisp,
 	normalizeServerUrl,
 	type ServerInfo,
@@ -37,3 +46,4 @@ export {
 	WispError,
 	type WispFailure,
 } from "./wisp/connection";
+export { wispUpstream } from "./wisp/upstream";

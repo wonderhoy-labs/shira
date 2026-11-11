@@ -2,9 +2,11 @@ import { CLOSE_NETWORK_ERROR, LinkStatus, MetaKind, StreamType } from "./link/fr
 import { ProtocolMismatchError, Relay, type RelayEvents } from "./link/relay";
 import type { LogStore } from "./log/store";
 import type { Phone } from "./phone";
-import { connectWisp, type WispConnection, type WispCredentials, WispError } from "./wisp/connection";
+import { type Upstream, type UpstreamConnector, UpstreamError } from "./upstream";
+import { type WispCredentials, WispError } from "./wisp/connection";
+import { wispUpstream } from "./wisp/upstream";
 
-/** Where the link is. "server-lost" means the phone is still there and the Wisp server is being tried again. */
+/** Where the link is. "server-lost" means the phone is still there and the upstream is being tried again. */
 export type LinkState = "idle" | "waiting-for-app" | "connecting" | "live" | "server-lost";
 
 /** "auto" opens the app's activation screen, which asks Android for the VPN. "manual" waits for someone to. */
@@ -21,9 +23,10 @@ export type StopReason =
 	/** Anything else, such as the Wisp server refusing a login, or Android refusing the VPN. */
 	| { kind: "error"; message: string };
 
-/** The Wisp server's details, once it has answered. */
+/** The upstream's details, once it has answered. */
 export interface ServerDetails {
 	udp: boolean;
+	/** The Wisp protocol version, or 0 for an upstream that isn't a Wisp server. */
 	wispVersion: number;
 	message: string | null;
 }
@@ -41,9 +44,12 @@ export interface LinkEvents {
 
 export interface LinkOptions {
 	phone: Phone;
-	/** A Wisp server address that normalizeServerUrl accepted. */
-	serverUrl: string;
-	credentials: WispCredentials | null;
+	/** A Wisp server address that normalizeServerUrl accepted. Ignored when there's an upstream. */
+	serverUrl?: string;
+	/** The Wisp server's login. Ignored when there's an upstream. */
+	credentials?: WispCredentials | null;
+	/** Where the phone's connections go, instead of the Wisp server at serverUrl. */
+	upstream?: UpstreamConnector;
 	/** Where every connection is written down. The same one can carry on across links. */
 	log: LogStore;
 	events: LinkEvents;
@@ -59,13 +65,13 @@ const sleep = (millis: number) => new Promise<void>((resolve) => setTimeout(reso
 
 /**
  * Gives a phone running Shira's app a network: waits for the app's VPN, greets it over adb, and relays its connections
- * through a Wisp server until stopped. It reconnects by itself when the Wisp server drops, and when the app drops the
- * connection for being quiet.
+ * through a Wisp server, or another upstream, until stopped. It reconnects by itself when the upstream drops, and when
+ * the app drops the connection for being quiet.
  */
 export class ShiraLink {
 	private linkState: LinkState = "idle";
 	private relay: Relay | null = null;
-	private wisp: WispConnection | null = null;
+	private upstream: Upstream | null = null;
 	private mode: ActivateMode | null = null;
 	/** Bumped to cancel whatever long-running job is going on. Each one checks it's still current. */
 	private job = 0;
@@ -108,7 +114,7 @@ export class ShiraLink {
 		this.deactivating = true;
 		this.mode = null;
 		this.relay?.deactivate();
-		this.closeWisp();
+		this.closeUpstream();
 		this.setState("idle");
 		this.options.events.onBusy?.(null);
 	}
@@ -185,19 +191,29 @@ export class ShiraLink {
 		return null;
 	}
 
-	/** Stays connected to the Wisp server until the phone goes or the page says stop. */
+	private connector(): UpstreamConnector {
+		const { upstream, serverUrl, credentials } = this.options;
+		if (upstream) return upstream;
+		if (!serverUrl) throw new Error("There's no Wisp server or other upstream to connect to.");
+		return wispUpstream(serverUrl, credentials ?? null);
+	}
+
+	/** Stays connected to the upstream until the phone goes or the page says stop. */
 	private async keepConnected(relay: Relay, isCurrent: () => boolean) {
-		const { serverUrl: url, credentials, log, events } = this.options;
+		const { log, events } = this.options;
+		const connector = this.connector();
 		let delay = FIRST_RETRY_MILLIS;
 		let everUp = false;
 
 		while (isCurrent() && this.relay === relay) {
 			this.setState(everUp ? "server-lost" : "connecting");
-			let wisp: WispConnection;
+			let upstream: Upstream;
 			try {
-				wisp = await connectWisp(url, credentials, relay.downloadGate);
+				upstream = await connector.connect(relay.downloadGate);
 			} catch (error) {
-				const refused = error instanceof WispError && error.failure !== "unreachable";
+				const refused =
+					(error instanceof WispError && error.failure !== "unreachable") ||
+					(error instanceof UpstreamError && error.permanent);
 				// A login problem won't fix itself, and a server that never worked probably has the wrong address.
 				if (refused || !everUp) throw error;
 				await sleep(delay);
@@ -205,28 +221,20 @@ export class ShiraLink {
 				continue;
 			}
 			if (!isCurrent() || this.relay !== relay) {
-				wisp.close();
+				upstream.close();
 				return;
 			}
-			this.wisp = wisp;
-			const lost = new Promise<void>((resolve) => {
-				wisp.onclose = () => resolve();
-				wisp.onerror = () => resolve();
-			});
-			events.onServer?.({
-				udp: wisp.udp_enabled,
-				wispVersion: wisp.wisp_version,
-				message: wisp.server_motd ?? null,
-			});
+			this.upstream = upstream;
+			events.onServer?.({ udp: upstream.udp, ...upstream.details });
 
 			const status = new Promise<{ ok: true } | { ok: false; message: string }>((resolve) => {
 				this.statusWaiter = resolve;
 			});
-			relay.attach(wisp, new URL(url).host);
+			relay.attach(upstream);
 			const up = await status;
 			if (!up.ok) {
-				wisp.onclose = () => undefined;
-				wisp.close();
+				this.upstream = null;
+				upstream.close();
 				throw new Error(up.message);
 			}
 			everUp = true;
@@ -234,9 +242,9 @@ export class ShiraLink {
 			events.onBusy?.(null);
 			this.setState("live");
 
-			await lost;
+			await upstream.lost;
 			if (!isCurrent() || this.relay !== relay) return;
-			this.wisp = null;
+			this.upstream = null;
 			log.closeAll(CLOSE_NETWORK_ERROR, Date.now());
 			relay.detach();
 			this.setState("server-lost");
@@ -281,7 +289,7 @@ export class ShiraLink {
 		const wasDeactivating = this.deactivating;
 		this.deactivating = false;
 		this.relay = null;
-		this.closeWisp();
+		this.closeUpstream();
 		this.options.log.closeAll(CLOSE_NETWORK_ERROR, Date.now());
 		if (wasDeactivating || !this.mode) return;
 		if (this.linkState === "waiting-for-app") return;
@@ -312,17 +320,14 @@ export class ShiraLink {
 		this.deactivating = true;
 		relay?.close();
 		this.deactivating = false;
-		this.closeWisp();
+		this.closeUpstream();
 		this.options.log.closeAll(CLOSE_NETWORK_ERROR, Date.now());
 	}
 
-	private closeWisp() {
-		const wisp = this.wisp;
-		this.wisp = null;
-		if (!wisp) return;
-		wisp.onclose = () => undefined;
-		wisp.onerror = () => undefined;
-		wisp.close();
+	private closeUpstream() {
+		const upstream = this.upstream;
+		this.upstream = null;
+		upstream?.close();
 	}
 
 	private async refreshPackages() {
