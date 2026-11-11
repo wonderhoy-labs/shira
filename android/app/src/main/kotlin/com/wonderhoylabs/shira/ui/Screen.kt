@@ -83,7 +83,6 @@ fun ShiraScreen(state: ScreenState, actions: ScreenActions) {
 				}
 			}
 			if (state.status !is ShiraStatus.Connected) Steps()
-			BrandFooter()
 		}
 	}
 }

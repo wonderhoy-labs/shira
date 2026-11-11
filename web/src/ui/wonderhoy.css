@@ -70,28 +70,3 @@ h2 {
 .app-bar-space {
 	flex: 1;
 }
-
-.app-footer {
-	padding: 16px var(--page-gutter) 24px;
-	text-align: center;
-	color: rgb(var(--mdui-color-on-surface-variant));
-	font-size: 12px;
-	flex: none;
-}
-
-.app-footer a {
-	color: inherit;
-}
-
-/* Inline, so it stays beside the words however they wrap. */
-.app-footer-mark {
-	display: inline-block;
-	width: 10px;
-	height: 10px;
-	margin-inline-end: 8px;
-	vertical-align: -1px;
-	border-radius: 50%;
-	background: rgb(var(--wonderhoy-brand));
-	box-shadow: 0 0 0 2px rgba(var(--wonderhoy-brand), 0.3);
-	flex: none;
-}

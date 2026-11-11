@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { Controller } from "../shira/controller";
-import { AppBar, Footer } from "./Brand";
+import { AppBar } from "./Brand";
 import { Monitor } from "./Monitor";
 import { Setup } from "./Setup";
 
@@ -13,10 +13,7 @@ export function App() {
 			{state.step === "live" ? (
 				<Monitor controller={controller} state={state} />
 			) : (
-				<>
-					<Setup controller={controller} state={state} />
-					<Footer />
-				</>
+				<Setup controller={controller} state={state} />
 			)}
 		</div>
 	);

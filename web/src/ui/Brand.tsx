@@ -22,20 +22,3 @@ export function AppBar({ logo, children }: { logo?: string; children?: ReactNode
 		</header>
 	);
 }
-
-/** The line at the bottom of the page: who made it, and who it's named for. */
-export function Footer() {
-	return (
-		<footer className="app-footer">
-			<span>
-				<span className="app-footer-mark" aria-hidden="true" />A{" "}
-				<a href="https://github.com/wonderhoy-labs" target="_blank" rel="noreferrer">
-					Wonderhoy Labs
-				</a>{" "}
-				project, named for {brand.character} of {brand.unit}
-				{/* 25-ji, Nightcord de. already ends in one. */}
-				{brand.unit.endsWith(".") ? "" : "."}
-			</span>
-		</footer>
-	);
-}
