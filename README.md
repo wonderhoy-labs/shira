@@ -76,7 +76,7 @@ relays every connection through a Wisp server, keeps going when the server drops
 [Asahi](https://github.com/wonderhoy-labs/asahi) uses it. Add a release by its address:
 
 ```json
-"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.2.1/wonderhoy-labs-shira-0.2.1.tgz"
+"@wonderhoy-labs/shira": "https://github.com/wonderhoy-labs/shira/releases/download/v0.2.2/wonderhoy-labs-shira-0.2.2.tgz"
 ```
 
 Bring an `Adb` from [Tango](https://github.com/yume-chan/ya-webadb), over WebUSB or the `adb` server:
@@ -125,7 +125,7 @@ packets, and the framing that carries them over a socket, with nothing else from
 [the library notes](.claude/skills/wonderhoy-unification/reference/library.md#android-libraries), then:
 
 ```kotlin
-implementation("shira:tunnel:0.2.1@aar")
+implementation("shira:tunnel:0.2.2@aar")
 ```
 
 `Tunnel` takes packets from the device with `onAppPacket` and frames from the socket with `onPagePacket`, and
